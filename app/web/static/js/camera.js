@@ -21,6 +21,9 @@
   let firstFrame = false;
   let capturing = false;
   let changingResolution = false;
+  // "toggle" = native V4L2 AF on/off, "software" = our sweep, null = unsupported
+  let afMode = null;
+  let afRunning = false;
   // In-flight adaptive pattern for focus slider.
   let pendingFocus = null;
   let inFlight = false;
@@ -141,8 +144,17 @@
       focusHint.hidden = false;
     }
     if (data.autofocus && data.autofocus.supported) {
+      // Camera exposes native V4L2 AF — use the toggle pathway.
+      afMode = "toggle";
       afToggle.disabled = false;
       afToggle.classList.toggle("on", !!data.autofocus.enabled);
+      afToggle.title = "자동 포커스 모드 켜기/끄기";
+    } else if (data.focus) {
+      // No native AF but manual focus exists → enable software AF (sweep).
+      afMode = "software";
+      afToggle.disabled = false;
+      afToggle.textContent = "AF 실행";
+      afToggle.title = "소프트웨어 자동 초점: focus 범위를 sweep하여 최적값 적용 (~3초)";
     }
   }
 
@@ -188,7 +200,15 @@
   }
 
   afToggle.addEventListener("click", async () => {
-    if (afToggle.disabled) return;
+    if (afToggle.disabled || afRunning || !afMode) return;
+    if (afMode === "toggle") {
+      await runNativeAfToggle();
+    } else if (afMode === "software") {
+      await runSoftwareAf();
+    }
+  });
+
+  async function runNativeAfToggle() {
     const turningOn = !afToggle.classList.contains("on");
     try {
       const resp = await fetch(
@@ -208,7 +228,42 @@
     } catch (err) {
       console.error("autofocus PATCH error:", err);
     }
-  });
+  }
+
+  async function runSoftwareAf() {
+    afRunning = true;
+    const originalText = afToggle.textContent;
+    const originalTitle = afToggle.title;
+    afToggle.disabled = true;
+    slider.disabled = true;
+    captureBtn.disabled = true;
+    afToggle.textContent = "AF 실행 중…";
+    try {
+      const resp = await fetch(
+        `/api/cameras/${encodeURIComponent(cameraId)}/autofocus`,
+        { method: "POST" }
+      );
+      if (!resp.ok) {
+        const detail = await safeDetail(resp);
+        throw new Error(detail);
+      }
+      const data = await resp.json();
+      slider.value = data.focus;
+      focusValue.textContent = data.focus;
+      afToggle.title =
+        `AF 완료: focus=${data.focus}, sharpness=${data.sharpness.toFixed(1)}, ${data.elapsed_ms}ms (${data.attempts} step)`;
+    } catch (err) {
+      console.error("software AF failed:", err);
+      afToggle.title = `AF 실패: ${err.message}`;
+      window.setTimeout(() => { afToggle.title = originalTitle; }, 4000);
+    } finally {
+      afRunning = false;
+      afToggle.textContent = originalText;
+      afToggle.disabled = false;
+      slider.disabled = false;
+      captureBtn.disabled = false;
+    }
+  }
 
   // ---------------------------------------------------------------------
   // Capture (shutter)

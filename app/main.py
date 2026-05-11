@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api.autofocus import router as autofocus_router
 from app.api.cameras import router as cameras_router
 from app.api.capture import router as capture_router
 from app.api.controls import router as controls_router
@@ -18,6 +19,7 @@ from app.api.images import router as images_router
 from app.api.stream import router as stream_router
 from app.camera.discovery import CameraDiscovery
 from app.camera.registry import CameraRegistry
+from app.capture.autofocus import SoftwareAutofocus
 from app.capture.service import CaptureService
 from app.config import settings
 from app.core.events import EventBus
@@ -41,6 +43,7 @@ async def lifespan(app: FastAPI):
     discovery.start(asyncio.get_running_loop())
     coordinator = StreamCoordinator(registry)
     capture_service = CaptureService(registry, coordinator, settings.storage_dir)
+    autofocus = SoftwareAutofocus(registry, coordinator)
     image_repository = ImageRepository(settings.storage_dir)
     thumbnail_cache = ThumbnailCache()
 
@@ -49,6 +52,7 @@ async def lifespan(app: FastAPI):
     app.state.camera_discovery = discovery
     app.state.stream_coordinator = coordinator
     app.state.capture_service = capture_service
+    app.state.autofocus = autofocus
     app.state.image_repository = image_repository
     app.state.thumbnail_cache = thumbnail_cache
     try:
@@ -71,6 +75,7 @@ app.include_router(events_router)
 app.include_router(stream_router)
 app.include_router(capture_router)
 app.include_router(images_router)
+app.include_router(autofocus_router)
 
 
 @app.get("/", response_class=HTMLResponse)
