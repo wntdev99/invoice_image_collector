@@ -9,9 +9,12 @@
 <body>
   <header class="topbar">
     <h1>{{ app_name }}</h1>
+    <span id="conn-indicator" class="indicator" title="hot-plug 스트림 연결 상태">●</span>
   </header>
   <main id="main">
-    <p class="placeholder">스켈레톤 부팅 OK. 카메라 목록 UI는 2단계에서 표시됩니다.</p>
+    <section id="camera-grid" class="grid" aria-live="polite"></section>
+    <p id="empty-state" class="empty" hidden>연결된 카메라 없음</p>
   </main>
+  <script src="{{ url_for('static', path='/js/index.js') }}" defer></script>
 </body>
 </html>

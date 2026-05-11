@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.api.cameras import router as cameras_router
+from app.api.events import router as events_router
 from app.camera.discovery import CameraDiscovery
 from app.camera.registry import CameraRegistry
 from app.config import settings
@@ -51,6 +52,7 @@ app.mount(
     name="static",
 )
 app.include_router(cameras_router)
+app.include_router(events_router)
 
 
 @app.get("/", response_class=HTMLResponse)

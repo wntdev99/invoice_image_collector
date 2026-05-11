@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 
@@ -24,13 +25,22 @@ class EventBus:
             try:
                 q.put_nowait(event)
             except asyncio.QueueFull:
-                _log.warning("subscriber queue full, dropping event %r", type(event).__name__)
+                _log.warning(
+                    "subscriber queue full, dropping event %r", type(event).__name__
+                )
 
-    async def subscribe(self) -> AsyncIterator[Any]:
+    @contextmanager
+    def subscribe(self) -> Iterator[asyncio.Queue[Any]]:
+        """Open a subscription. Caller awaits ``q.get()`` to receive events.
+
+        Usage::
+
+            with bus.subscribe() as q:
+                event = await asyncio.wait_for(q.get(), timeout=...)
+        """
         q: asyncio.Queue[Any] = asyncio.Queue(maxsize=self._queue_size)
         self._subscribers.add(q)
         try:
-            while True:
-                yield await q.get()
+            yield q
         finally:
             self._subscribers.discard(q)
