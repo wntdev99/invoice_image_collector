@@ -88,6 +88,24 @@ class StreamCoordinator:
         finally:
             await self.release(camera_id, source)
 
+    async def force_close_active(self) -> str | None:
+        """Force-close the current active source (used by capture before reopen).
+
+        Returns the camera id that was closed, or ``None`` if nothing was active.
+        Any MJPEG generator on that source will observe StreamClosed on its
+        next ``wait_frame_after`` call and end gracefully.
+        """
+        async with self._lock:
+            if self._active_source is None:
+                return None
+            prev_id = self._active_id
+            _log.info("stream: force-close for capture id=%s", prev_id)
+            self._active_source.close()
+            self._active_source = None
+            self._active_id = None
+            self._refcount = 0
+            return prev_id
+
     async def shutdown(self) -> None:
         async with self._lock:
             if self._active_source is not None:

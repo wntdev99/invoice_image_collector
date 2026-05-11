@@ -33,6 +33,20 @@
         <p id="focus-hint" class="hint" hidden></p>
       </section>
 
+      <section class="control-group capture-group">
+        <h3 class="group-title">촬영</h3>
+        <div class="capture-row">
+          <input type="text" id="label-input" placeholder="라벨" value="capture" maxlength="64">
+          <select id="ext-select">
+            <option value="png" selected>png</option>
+            <option value="jpg">jpg</option>
+            <option value="webp">webp</option>
+          </select>
+          <button id="capture-btn" type="button">촬영</button>
+        </div>
+        <p id="capture-status" class="hint" hidden></p>
+      </section>
+
       <dl class="meta">
         <dt>id</dt><dd>{{ camera.id }}</dd>
         <dt>serial</dt><dd>{{ camera.serial or "-" }}</dd>

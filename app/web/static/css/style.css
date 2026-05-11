@@ -234,3 +234,58 @@ body {
   font-size: 11px;
   color: #9aa0a6;
 }
+
+.group-title {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c0c4cc;
+}
+
+.capture-group { border-bottom: none; }
+
+.capture-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+#label-input {
+  flex: 1;
+  min-width: 0;
+  background: #2a2d34;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  color: #e8eaed;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+#label-input:focus {
+  outline: none;
+  border-color: #4a90e2;
+}
+#ext-select {
+  background: #2a2d34;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  color: #e8eaed;
+  padding: 6px 4px;
+  font-size: 13px;
+}
+#capture-btn {
+  background: #4a90e2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+}
+#capture-btn:hover:not(:disabled) { background: #5aa0f2; }
+#capture-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+#capture-status.success { color: #4ade80; }
+#capture-status.error { color: #ef4444; }
