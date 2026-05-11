@@ -1,0 +1,28 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+  background: #0f1115;
+  color: #e8eaed;
+}
+
+.topbar {
+  padding: 16px 24px;
+  background: #1a1d24;
+  border-bottom: 1px solid #2a2d34;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+#main {
+  padding: 24px;
+}
+
+.placeholder {
+  color: #9aa0a6;
+}
