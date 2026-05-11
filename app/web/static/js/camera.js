@@ -5,6 +5,8 @@
   const cameraId = main.dataset.cameraId;
 
   const img = document.getElementById("stream");
+  const streamWrap = document.getElementById("stream-wrap");
+  const zoomIndicator = document.getElementById("zoom-indicator");
   const status = document.getElementById("stream-status");
   const slider = document.getElementById("focus-slider");
   const focusValue = document.getElementById("focus-value");
@@ -369,7 +371,97 @@
     status.textContent = statusText || "스트림 재연결 중…";
     status.hidden = false;
     img.src = `/stream/${encodeURIComponent(cameraId)}?t=${Date.now()}`;
+    resetZoom();
   }
+
+  // ---------------------------------------------------------------------
+  // Pan / zoom (client-side CSS transform)
+  // ---------------------------------------------------------------------
+
+  const ZOOM_MIN = 1;
+  const ZOOM_MAX = 10;
+  const ZOOM_STEP = 1.15;
+
+  let zoomScale = 1;
+  let panX = 0;
+  let panY = 0;
+  let dragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function applyZoom() {
+    const imgW = img.offsetWidth;
+    const imgH = img.offsetHeight;
+    const sw = imgW * zoomScale;
+    const sh = imgH * zoomScale;
+    // pan range: scaled image's left/top can go as low as (container - scaled),
+    // and at most 0 (image's left/top stuck to container's left/top).
+    const minX = Math.min(0, imgW - sw);
+    const minY = Math.min(0, imgH - sh);
+    panX = clamp(panX, minX, 0);
+    panY = clamp(panY, minY, 0);
+    img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+
+    const pct = Math.round(zoomScale * 100);
+    zoomIndicator.textContent = `${pct}%`;
+    zoomIndicator.hidden = zoomScale === 1;
+    streamWrap.classList.toggle("zoomed", zoomScale > 1);
+  }
+
+  function resetZoom() {
+    zoomScale = 1;
+    panX = 0;
+    panY = 0;
+    applyZoom();
+  }
+
+  streamWrap.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const rect = streamWrap.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+    const newScale = clamp(zoomScale * factor, ZOOM_MIN, ZOOM_MAX);
+    // Keep the pixel under the cursor visually fixed.
+    panX = mx - (mx - panX) * (newScale / zoomScale);
+    panY = my - (my - panY) * (newScale / zoomScale);
+    zoomScale = newScale;
+    applyZoom();
+  }, { passive: false });
+
+  streamWrap.addEventListener("mousedown", (e) => {
+    if (zoomScale <= 1) return;
+    if (e.button !== 0) return;
+    dragging = true;
+    dragStartX = e.clientX - panX;
+    dragStartY = e.clientY - panY;
+    streamWrap.classList.add("grabbing");
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    panX = e.clientX - dragStartX;
+    panY = e.clientY - dragStartY;
+    applyZoom();
+  });
+  window.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    streamWrap.classList.remove("grabbing");
+  });
+
+  streamWrap.addEventListener("dblclick", () => {
+    resetZoom();
+  });
+
+  // Re-clamp on viewport resize (container size may change).
+  window.addEventListener("resize", () => {
+    if (zoomScale > 1) applyZoom();
+  });
 
   async function safeDetail(resp) {
     try {

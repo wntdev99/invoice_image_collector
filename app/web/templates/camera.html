@@ -13,9 +13,10 @@
     <span class="device-path">{{ camera.device_path }}</span>
   </header>
   <main class="camera-page" data-camera-id="{{ camera.id }}">
-    <section class="stream-wrap">
+    <section class="stream-wrap" id="stream-wrap">
       <img id="stream" src="/stream/{{ camera.id }}" alt="live preview" />
       <div id="stream-status" class="stream-status">스트림 연결 중…</div>
+      <div id="zoom-indicator" class="zoom-indicator" hidden>100%</div>
     </section>
     <aside class="control-panel">
       <h2 class="panel-title">컨트롤</h2>
