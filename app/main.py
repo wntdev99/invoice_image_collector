@@ -9,23 +9,22 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from app.api.cameras import router as cameras_router
 from app.api.events import router as events_router
+from app.api.stream import router as stream_router
 from app.camera.discovery import CameraDiscovery
 from app.camera.registry import CameraRegistry
 from app.config import settings
 from app.core.events import EventBus
+from app.stream.coordinator import StreamCoordinator
+from app.web.templates import TEMPLATES, WEB_DIR
 
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
-
-WEB_DIR = Path(__file__).parent / "web"
-TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
 
 @asynccontextmanager
@@ -34,13 +33,16 @@ async def lifespan(app: FastAPI):
     registry = CameraRegistry()
     discovery = CameraDiscovery(registry, bus)
     discovery.start(asyncio.get_running_loop())
+    coordinator = StreamCoordinator(registry)
 
     app.state.event_bus = bus
     app.state.camera_registry = registry
     app.state.camera_discovery = discovery
+    app.state.stream_coordinator = coordinator
     try:
         yield
     finally:
+        await coordinator.shutdown()
         discovery.stop()
 
 
@@ -53,6 +55,7 @@ app.mount(
 )
 app.include_router(cameras_router)
 app.include_router(events_router)
+app.include_router(stream_router)
 
 
 @app.get("/", response_class=HTMLResponse)

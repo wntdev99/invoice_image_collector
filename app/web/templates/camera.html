@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ camera.name }} — {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="back-link">← 뒤로</a>
+    <h1>{{ camera.name }}</h1>
+    <span class="device-path">{{ camera.device_path }}</span>
+  </header>
+  <main class="camera-page">
+    <section class="stream-wrap">
+      <img id="stream" src="/stream/{{ camera.id }}" alt="live preview" />
+      <div id="stream-status" class="stream-status">스트림 연결 중…</div>
+    </section>
+    <aside class="control-panel">
+      <h2 class="panel-title">컨트롤</h2>
+      <p class="placeholder">포커스·촬영·갤러리는 4–6단계에서 추가됩니다.</p>
+      <dl class="meta">
+        <dt>id</dt><dd>{{ camera.id }}</dd>
+        <dt>serial</dt><dd>{{ camera.serial or "-" }}</dd>
+        <dt>vendor/product</dt><dd>{{ camera.vendor_id }}:{{ camera.product_id }}</dd>
+        <dt>AF / MF</dt><dd>{{ "Y" if camera.capabilities.has_autofocus else "N" }} / {{ "Y" if camera.capabilities.has_manual_focus else "N" }}</dd>
+      </dl>
+    </aside>
+  </main>
+  <script>
+    (() => {
+      const img = document.getElementById("stream");
+      const status = document.getElementById("stream-status");
+      let firstFrame = false;
+      img.addEventListener("load", () => {
+        if (!firstFrame) {
+          firstFrame = true;
+          status.textContent = "";
+          status.hidden = true;
+        }
+      });
+      img.addEventListener("error", () => {
+        status.textContent = "스트림 연결 실패 또는 종료";
+        status.classList.add("error");
+        status.hidden = false;
+      });
+    })();
+  </script>
+</body>
+</html>
