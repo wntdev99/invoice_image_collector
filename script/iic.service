@@ -1,0 +1,57 @@
+# /etc/systemd/system/iic.service
+#
+# invoice_image_collector — 부팅 시 자동 시작 (systemd unit 템플릿)
+#
+# 설치 전 다음 항목을 환경에 맞게 수정하세요:
+#   - User=YOUR_USERNAME            ← 실제 사용자명
+#   - WorkingDirectory=/ABSOLUTE/PATH/TO/invoice_image_collector
+#   - ExecStart 경로                ← WorkingDirectory와 일치
+#   - Environment IIC_STORAGE_DIR   ← (선택) 저장 경로 변경 시
+#
+# 설치:
+#   sudo cp script/iic.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now iic.service
+#
+# 상태/로그:
+#   systemctl status iic.service
+#   journalctl -u iic.service -f
+#
+# 정지/재시작:
+#   sudo systemctl stop iic.service
+#   sudo systemctl restart iic.service
+
+[Unit]
+Description=Invoice Image Collector — USB camera capture web app
+Documentation=https://github.com/wntdev99/invoice_image_collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+Group=video
+WorkingDirectory=/ABSOLUTE/PATH/TO/invoice_image_collector
+
+# IIC_HOST / IIC_PORT / IIC_STORAGE_DIR — Settings가 읽음
+Environment=IIC_HOST=0.0.0.0
+Environment=IIC_PORT=8001
+# Environment=IIC_STORAGE_DIR=/var/lib/invoice_image_collector
+
+# python -m app 진입점이 settings.host/port를 uvicorn.run에 넘김
+ExecStart=/ABSOLUTE/PATH/TO/invoice_image_collector/.venv/bin/python -m app
+
+Restart=on-failure
+RestartSec=3
+# lifespan이 capture 스레드 / udev observer를 정리할 시간
+TimeoutStopSec=10
+
+# 권장 보안 sandboxing (선택 — 동작에 문제 있으면 한 줄씩 주석 처리해 디버깅)
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/YOUR_USERNAME/Pictures/invoice_image_collector
+
+[Install]
+WantedBy=multi-user.target
