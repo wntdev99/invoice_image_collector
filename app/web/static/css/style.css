@@ -180,3 +180,57 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   word-break: break-all;
 }
+
+.control-group {
+  margin: 0 0 18px 0;
+  padding: 0 0 12px 0;
+  border-bottom: 1px solid #2a2d34;
+}
+.control-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.control-row label {
+  font-size: 13px;
+  color: #c0c4cc;
+}
+#focus-slider {
+  width: 100%;
+  margin: 4px 0 0 0;
+  accent-color: #4a90e2;
+}
+#focus-slider:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+#af-toggle {
+  background: #2a2d34;
+  color: #c0c4cc;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+#af-toggle:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+#af-toggle.on {
+  background: #4a90e2;
+  border-color: #4a90e2;
+  color: white;
+}
+#focus-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 13px;
+  color: #e8eaed;
+}
+.hint {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+  color: #9aa0a6;
+}

@@ -1,18 +1,19 @@
 """V4L2-specific probing and capture utilities.
 
 Capability probing uses subprocess to ``v4l2-ctl`` (best-effort).
-Capture uses OpenCV's V4L2 backend.
+Capture and ctrl access use OpenCV's V4L2 backend.
 """
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 from typing import TYPE_CHECKING
 
 import cv2
 
 from app.camera.errors import CameraBusy
-from app.camera.models import Capabilities
+from app.camera.models import Capabilities, FocusRange
 
 if TYPE_CHECKING:
     import numpy as np
@@ -22,6 +23,9 @@ _log = logging.getLogger(__name__)
 
 _AF_CTRL_TOKENS = ("focus_automatic_continuous", "focus_auto")
 _MF_CTRL_TOKENS = ("focus_absolute", "focus_relative")
+_CTRL_RANGE_RE = re.compile(
+    r"min=(-?\d+)\s+max=(-?\d+)\s+step=(\d+)\s+default=(-?\d+)"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +39,7 @@ def probe_capabilities(device_path: str) -> Capabilities:
     return Capabilities(
         has_autofocus=any(t in ctrls_text for t in _AF_CTRL_TOKENS),
         has_manual_focus=any(t in ctrls_text for t in _MF_CTRL_TOKENS),
+        focus=_probe_focus_range(ctrls_text),
         formats=tuple(formats),
         resolutions=tuple(resolutions),
     )
@@ -60,6 +65,22 @@ def _run_v4l2_ctl(args: list[str], timeout: float = 2.0) -> str | None:
     if result.returncode != 0:
         return None
     return result.stdout
+
+
+def _probe_focus_range(ctrls_text: str) -> FocusRange | None:
+    for line in ctrls_text.splitlines():
+        if "focus_absolute" not in line:
+            continue
+        m = _CTRL_RANGE_RE.search(line)
+        if m is None:
+            return None
+        return FocusRange(
+            min=int(m.group(1)),
+            max=int(m.group(2)),
+            step=max(int(m.group(3)), 1),
+            default=int(m.group(4)),
+        )
+    return None
 
 
 def _probe_formats_and_resolutions(
@@ -120,7 +141,7 @@ def preferred_format(formats: tuple[str, ...]) -> str | None:
 
 
 class V4L2CaptureDevice:
-    """One open V4L2 capture handle. Step 3 scope: open/read/release only."""
+    """One open V4L2 capture handle. Exposes capture + live ctrl get/set."""
 
     def __init__(self, device_path: str) -> None:
         self._device_path = device_path
@@ -134,6 +155,10 @@ class V4L2CaptureDevice:
     @property
     def negotiated(self) -> tuple[int, int, float]:
         return self._negotiated
+
+    @property
+    def is_open(self) -> bool:
+        return self._cap is not None
 
     def open(
         self,
@@ -177,3 +202,28 @@ class V4L2CaptureDevice:
             self._cap.release()
             self._cap = None
             _log.info("V4L2 released: path=%s", self._device_path)
+
+    # ----- Live V4L2 ctrl access (no-op when device is not open) -----
+
+    def get_focus(self) -> int | None:
+        if self._cap is None:
+            return None
+        return int(self._cap.get(cv2.CAP_PROP_FOCUS))
+
+    def set_focus(self, value: int) -> int | None:
+        if self._cap is None:
+            return None
+        self._cap.set(cv2.CAP_PROP_FOCUS, float(value))
+        return self.get_focus()
+
+    def get_autofocus(self) -> bool | None:
+        if self._cap is None:
+            return None
+        v = self._cap.get(cv2.CAP_PROP_AUTOFOCUS)
+        return bool(v) if v >= 0 else None
+
+    def set_autofocus(self, enabled: bool) -> bool | None:
+        if self._cap is None:
+            return None
+        self._cap.set(cv2.CAP_PROP_AUTOFOCUS, 1.0 if enabled else 0.0)
+        return self.get_autofocus()

@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.cameras import router as cameras_router
+from app.api.controls import router as controls_router
 from app.api.events import router as events_router
 from app.api.stream import router as stream_router
 from app.camera.discovery import CameraDiscovery
@@ -54,6 +55,7 @@ app.mount(
     name="static",
 )
 app.include_router(cameras_router)
+app.include_router(controls_router)
 app.include_router(events_router)
 app.include_router(stream_router)
 

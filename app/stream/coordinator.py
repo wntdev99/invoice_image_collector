@@ -27,6 +27,12 @@ class StreamCoordinator:
         self._active_source: FrameSource | None = None
         self._refcount = 0
 
+    def get_active_source_for(self, camera_id: str) -> FrameSource | None:
+        """Read-only snapshot — used by /controls endpoints. Race window OK."""
+        if self._active_id == camera_id:
+            return self._active_source
+        return None
+
     async def acquire(self, camera_id: str, loop: asyncio.AbstractEventLoop) -> FrameSource:
         async with self._lock:
             # Same camera already streaming → share it

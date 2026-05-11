@@ -21,6 +21,16 @@ def serialize_camera(camera: Camera) -> dict:
         "capabilities": {
             "has_autofocus": camera.capabilities.has_autofocus,
             "has_manual_focus": camera.capabilities.has_manual_focus,
+            "focus": (
+                {
+                    "min": camera.capabilities.focus.min,
+                    "max": camera.capabilities.focus.max,
+                    "step": camera.capabilities.focus.step,
+                    "default": camera.capabilities.focus.default,
+                }
+                if camera.capabilities.focus is not None
+                else None
+            ),
             "formats": list(camera.capabilities.formats),
             "resolutions": [list(r) for r in camera.capabilities.resolutions],
         },

@@ -12,40 +12,34 @@
     <h1>{{ camera.name }}</h1>
     <span class="device-path">{{ camera.device_path }}</span>
   </header>
-  <main class="camera-page">
+  <main class="camera-page" data-camera-id="{{ camera.id }}">
     <section class="stream-wrap">
       <img id="stream" src="/stream/{{ camera.id }}" alt="live preview" />
       <div id="stream-status" class="stream-status">스트림 연결 중…</div>
     </section>
     <aside class="control-panel">
       <h2 class="panel-title">컨트롤</h2>
-      <p class="placeholder">포커스·촬영·갤러리는 4–6단계에서 추가됩니다.</p>
+
+      <section class="control-group" id="focus-group">
+        <div class="control-row">
+          <label>포커스 모드</label>
+          <button id="af-toggle" type="button" disabled title="자동 포커스 지원 시 활성화">AF</button>
+        </div>
+        <div class="control-row">
+          <label for="focus-slider">수동 포커스</label>
+          <output id="focus-value" for="focus-slider">-</output>
+        </div>
+        <input type="range" id="focus-slider" disabled />
+        <p id="focus-hint" class="hint" hidden></p>
+      </section>
+
       <dl class="meta">
         <dt>id</dt><dd>{{ camera.id }}</dd>
         <dt>serial</dt><dd>{{ camera.serial or "-" }}</dd>
         <dt>vendor/product</dt><dd>{{ camera.vendor_id }}:{{ camera.product_id }}</dd>
-        <dt>AF / MF</dt><dd>{{ "Y" if camera.capabilities.has_autofocus else "N" }} / {{ "Y" if camera.capabilities.has_manual_focus else "N" }}</dd>
       </dl>
     </aside>
   </main>
-  <script>
-    (() => {
-      const img = document.getElementById("stream");
-      const status = document.getElementById("stream-status");
-      let firstFrame = false;
-      img.addEventListener("load", () => {
-        if (!firstFrame) {
-          firstFrame = true;
-          status.textContent = "";
-          status.hidden = true;
-        }
-      });
-      img.addEventListener("error", () => {
-        status.textContent = "스트림 연결 실패 또는 종료";
-        status.classList.add("error");
-        status.hidden = false;
-      });
-    })();
-  </script>
+  <script src="{{ url_for('static', path='/js/camera.js') }}" defer></script>
 </body>
 </html>

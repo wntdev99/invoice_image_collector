@@ -16,6 +16,7 @@ from app.camera.backends.v4l2 import (
     best_match_resolution,
     preferred_format,
 )
+from app.camera.controller import CameraController
 from app.camera.models import Camera
 from app.stream.errors import StreamClosed
 
@@ -42,6 +43,7 @@ class FrameSource:
         self._target_fps = target_fps
 
         self._device = V4L2CaptureDevice(camera.device_path)
+        self._controller = CameraController(self._device, camera.capabilities)
         self._capture_thread: threading.Thread | None = None
         self._stop_evt = threading.Event()
 
@@ -57,6 +59,10 @@ class FrameSource:
     @property
     def negotiated(self) -> tuple[int, int, float]:
         return self._device.negotiated
+
+    @property
+    def controller(self) -> CameraController:
+        return self._controller
 
     async def start(self) -> None:
         width, height = best_match_resolution(
