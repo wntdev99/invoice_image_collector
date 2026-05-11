@@ -301,6 +301,18 @@ body {
 }
 #resolution-status.error { color: #ef4444; }
 
+#plf-select {
+  width: 100%;
+  background: #2a2d34;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  color: #e8eaed;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+#plf-select:disabled { opacity: 0.6; cursor: progress; }
+#plf-status.error { color: #ef4444; }
+
 .link-inline {
   font-size: 12px;
   font-weight: 500;

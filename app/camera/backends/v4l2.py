@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import cv2
 
 from app.camera.errors import CameraBusy
-from app.camera.models import Capabilities, FocusRange
+from app.camera.models import Capabilities, FocusRange, PowerLineFrequency
 
 if TYPE_CHECKING:
     import numpy as np
@@ -24,7 +24,7 @@ _log = logging.getLogger(__name__)
 _AF_CTRL_TOKENS = ("focus_automatic_continuous", "focus_auto")
 _MF_CTRL_TOKENS = ("focus_absolute", "focus_relative")
 _CTRL_RANGE_RE = re.compile(
-    r"min=(-?\d+)\s+max=(-?\d+)\s+step=(\d+)\s+default=(-?\d+)"
+    r"min=(-?\d+)\s+max=(-?\d+)(?:\s+step=(\d+))?\s+default=(-?\d+)"
 )
 
 
@@ -34,15 +34,43 @@ _CTRL_RANGE_RE = re.compile(
 
 
 def probe_capabilities(device_path: str) -> Capabilities:
-    ctrls_text = _run_v4l2_ctl(["--device", device_path, "--list-ctrls"]) or ""
+    # --list-ctrls-menus (-L) also emits indented "N: Label" rows for menu
+    # controls, which we need to discover power_line_frequency options.
+    ctrls_text = _run_v4l2_ctl(["--device", device_path, "--list-ctrls-menus"]) or ""
     formats, resolutions = _probe_formats_and_resolutions(device_path)
     return Capabilities(
         has_autofocus=any(t in ctrls_text for t in _AF_CTRL_TOKENS),
         has_manual_focus=any(t in ctrls_text for t in _MF_CTRL_TOKENS),
         focus=_probe_focus_range(ctrls_text),
+        power_line_frequency=_probe_power_line_frequency(ctrls_text),
         formats=tuple(formats),
         resolutions=tuple(resolutions),
     )
+
+
+def _v4l2_set_ctrl(device_path: str, name: str, value: int) -> bool:
+    out = _run_v4l2_ctl(
+        ["--device", device_path, "--set-ctrl", f"{name}={value}"]
+    )
+    return out is not None
+
+
+_CTRL_VALUE_RE = re.compile(r":\s*(-?\d+)\s*$")
+
+
+def _v4l2_get_int_ctrl(device_path: str, name: str) -> int | None:
+    out = _run_v4l2_ctl(
+        ["--device", device_path, "--get-ctrl", name]
+    )
+    if not out:
+        return None
+    # Output looks like:  "power_line_frequency: 2"
+    for line in out.splitlines():
+        if name in line:
+            m = _CTRL_VALUE_RE.search(line)
+            if m:
+                return int(m.group(1))
+    return None
 
 
 def _run_v4l2_ctl(args: list[str], timeout: float = 2.0) -> str | None:
@@ -74,11 +102,47 @@ def _probe_focus_range(ctrls_text: str) -> FocusRange | None:
         m = _CTRL_RANGE_RE.search(line)
         if m is None:
             return None
+        step_str = m.group(3)
         return FocusRange(
             min=int(m.group(1)),
             max=int(m.group(2)),
-            step=max(int(m.group(3)), 1),
+            step=max(int(step_str) if step_str else 1, 1),
             default=int(m.group(4)),
+        )
+    return None
+
+
+_MENU_OPTION_RE = re.compile(r"^\s+(\d+):\s+(.+?)\s*$")
+
+
+def _probe_power_line_frequency(ctrls_text: str) -> PowerLineFrequency | None:
+    lines = ctrls_text.splitlines()
+    for i, line in enumerate(lines):
+        if "power_line_frequency" not in line or "(menu)" not in line:
+            continue
+        rng = _CTRL_RANGE_RE.search(line)
+        if rng is None:
+            return None
+        # Collect indented "N: Label" rows that immediately follow.
+        options: list[tuple[int, str]] = []
+        for j in range(i + 1, len(lines)):
+            nxt = lines[j]
+            if not nxt.strip():
+                # blank line breaks the option block on some v4l2-utils versions
+                if options:
+                    break
+                continue
+            mo = _MENU_OPTION_RE.match(nxt)
+            if mo is None:
+                break
+            options.append((int(mo.group(1)), mo.group(2).strip()))
+        if not options:
+            return None
+        return PowerLineFrequency(
+            min=int(rng.group(1)),
+            max=int(rng.group(2)),
+            default=int(rng.group(4)),
+            options=tuple(options),
         )
     return None
 
@@ -227,3 +291,16 @@ class V4L2CaptureDevice:
             return None
         self._cap.set(cv2.CAP_PROP_AUTOFOCUS, 1.0 if enabled else 0.0)
         return self.get_autofocus()
+
+    # ``power_line_frequency`` has no dedicated cv2.CAP_PROP_* mapping, so we
+    # go via v4l2-ctl. uvcvideo allows ctrl ioctls on a separate fd while our
+    # cv2.VideoCapture is streaming, so this is safe to call mid-stream.
+
+    def get_power_line_frequency(self) -> int | None:
+        return _v4l2_get_int_ctrl(self._device_path, "power_line_frequency")
+
+    def set_power_line_frequency(self, value: int) -> int | None:
+        ok = _v4l2_set_ctrl(self._device_path, "power_line_frequency", value)
+        if not ok:
+            return None
+        return self.get_power_line_frequency()

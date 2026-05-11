@@ -21,6 +21,7 @@ router = APIRouter(prefix="/api/cameras", tags=["controls"])
 class ControlsUpdate(BaseModel):
     focus: int | None = None
     autofocus: bool | None = None
+    power_line_frequency: int | None = None
 
 
 def _active_source_or_409(request: Request, camera_id: str):
@@ -55,4 +56,8 @@ async def patch_controls(
     if body.autofocus is not None:
         actual_af = source.controller.set_autofocus(body.autofocus)
         applied["autofocus"] = actual_af
+    if body.power_line_frequency is not None:
+        applied["power_line_frequency"] = source.controller.set_power_line_frequency(
+            body.power_line_frequency
+        )
     return applied

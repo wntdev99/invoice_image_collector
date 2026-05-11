@@ -31,6 +31,19 @@ def serialize_camera(camera: Camera) -> dict:
                 if camera.capabilities.focus is not None
                 else None
             ),
+            "power_line_frequency": (
+                {
+                    "min": camera.capabilities.power_line_frequency.min,
+                    "max": camera.capabilities.power_line_frequency.max,
+                    "default": camera.capabilities.power_line_frequency.default,
+                    "options": [
+                        {"value": v, "label": label}
+                        for v, label in camera.capabilities.power_line_frequency.options
+                    ],
+                }
+                if camera.capabilities.power_line_frequency is not None
+                else None
+            ),
             "formats": list(camera.capabilities.formats),
             "resolutions": [list(r) for r in camera.capabilities.resolutions],
         },

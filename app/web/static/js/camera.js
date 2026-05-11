@@ -16,6 +16,9 @@
   const captureStatus = document.getElementById("capture-status");
   const resolutionSelect = document.getElementById("resolution-select");
   const resolutionStatus = document.getElementById("resolution-status");
+  const plfGroup = document.getElementById("plf-group");
+  const plfSelect = document.getElementById("plf-select");
+  const plfStatus = document.getElementById("plf-status");
 
   let controlsLoaded = false;
   let firstFrame = false;
@@ -156,7 +159,60 @@
       afToggle.textContent = "AF 실행";
       afToggle.title = "소프트웨어 자동 초점: focus 범위를 sweep하여 최적값 적용 (~3초)";
     }
+
+    if (data.power_line_frequency) {
+      plfSelect.replaceChildren();
+      for (const opt of data.power_line_frequency.options) {
+        const o = document.createElement("option");
+        o.value = String(opt.value);
+        o.textContent = opt.label;
+        if (opt.value === data.power_line_frequency.value) o.selected = true;
+        plfSelect.appendChild(o);
+      }
+      plfGroup.hidden = false;
+    } else {
+      plfGroup.hidden = true;
+    }
   }
+
+  plfSelect.addEventListener("change", async () => {
+    const value = parseInt(plfSelect.value, 10);
+    if (Number.isNaN(value)) return;
+    plfSelect.disabled = true;
+    plfStatus.hidden = false;
+    plfStatus.classList.remove("error");
+    plfStatus.textContent = "적용 중…";
+    try {
+      const resp = await fetch(
+        `/api/cameras/${encodeURIComponent(cameraId)}/controls`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ power_line_frequency: value }),
+        }
+      );
+      if (!resp.ok) {
+        const detail = await safeDetail(resp);
+        throw new Error(detail);
+      }
+      const data = await resp.json();
+      const applied = data.power_line_frequency;
+      if (applied === null || applied === undefined) {
+        throw new Error("not applied");
+      }
+      // Sync option list to server-confirmed value (V4L2 may clamp).
+      for (const o of plfSelect.options) {
+        o.selected = parseInt(o.value, 10) === applied;
+      }
+      plfStatus.textContent = `적용됨 (${plfSelect.options[plfSelect.selectedIndex].textContent})`;
+      window.setTimeout(() => { plfStatus.hidden = true; }, 2000);
+    } catch (err) {
+      plfStatus.classList.add("error");
+      plfStatus.textContent = `적용 실패: ${err.message}`;
+    } finally {
+      plfSelect.disabled = false;
+    }
+  });
 
   slider.addEventListener("input", () => {
     const value = parseInt(slider.value, 10);

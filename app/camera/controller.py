@@ -31,6 +31,15 @@ class CameraController:
             "supported": self._caps.has_autofocus,
             "enabled": self._device.get_autofocus() if self._caps.has_autofocus else None,
         }
+        if self._caps.power_line_frequency is not None:
+            plf = self._caps.power_line_frequency
+            out["power_line_frequency"] = {
+                "value": self._device.get_power_line_frequency(),
+                "min": plf.min,
+                "max": plf.max,
+                "default": plf.default,
+                "options": [{"value": v, "label": label} for v, label in plf.options],
+            }
         return out
 
     def set_focus(self, value: int) -> int | None:
@@ -43,3 +52,10 @@ class CameraController:
         if not self._caps.has_autofocus:
             return None
         return self._device.set_autofocus(enabled)
+
+    def set_power_line_frequency(self, value: int) -> int | None:
+        if self._caps.power_line_frequency is None:
+            return None
+        plf = self._caps.power_line_frequency
+        clamped = max(plf.min, min(plf.max, value))
+        return self._device.set_power_line_frequency(clamped)
