@@ -15,7 +15,6 @@ class EncodingFailed(Exception):
 
 _JPEG_QUALITY = 95
 _WEBP_QUALITY = 95
-_PNG_COMPRESSION = 3  # 0 (none) — 9 (max). 3 is a good speed/size tradeoff.
 
 
 def encode_image(frame: "np.ndarray", ext: str) -> bytes:
@@ -23,9 +22,6 @@ def encode_image(frame: "np.ndarray", ext: str) -> bytes:
     if ext == "jpg":
         params = [cv2.IMWRITE_JPEG_QUALITY, _JPEG_QUALITY]
         cv2_ext = ".jpg"
-    elif ext == "png":
-        params = [cv2.IMWRITE_PNG_COMPRESSION, _PNG_COMPRESSION]
-        cv2_ext = ".png"
     elif ext == "webp":
         params = [cv2.IMWRITE_WEBP_QUALITY, _WEBP_QUALITY]
         cv2_ext = ".webp"

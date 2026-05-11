@@ -12,8 +12,8 @@ import re
 from datetime import datetime
 
 
-SUPPORTED_EXTENSIONS = ("png", "jpg", "webp")
-DEFAULT_EXTENSION = "png"
+SUPPORTED_EXTENSIONS = ("jpg", "webp")
+DEFAULT_EXTENSION = "jpg"
 DEFAULT_LABEL = "capture"
 
 _LABEL_SANITIZE = re.compile(r"[^A-Za-z0-9_\-가-힣]")
