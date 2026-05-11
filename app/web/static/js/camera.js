@@ -14,10 +14,13 @@
   const extSelect = document.getElementById("ext-select");
   const captureBtn = document.getElementById("capture-btn");
   const captureStatus = document.getElementById("capture-status");
+  const resolutionSelect = document.getElementById("resolution-select");
+  const resolutionStatus = document.getElementById("resolution-status");
 
   let controlsLoaded = false;
   let firstFrame = false;
   let capturing = false;
+  let changingResolution = false;
   // In-flight adaptive pattern for focus slider.
   let pendingFocus = null;
   let inFlight = false;
@@ -28,13 +31,81 @@
       status.textContent = "";
       status.hidden = true;
       loadControls();
+      loadStreamConfig();
     }
   });
   img.addEventListener("error", () => {
-    if (capturing) return;  // shutter intentionally tears down the stream
+    if (capturing || changingResolution) return;
     status.textContent = "스트림 연결 실패 또는 종료";
     status.classList.add("error");
     status.hidden = false;
+  });
+
+  // ---------------------------------------------------------------------
+  // Stream resolution
+  // ---------------------------------------------------------------------
+
+  async function loadStreamConfig() {
+    try {
+      const resp = await fetch(
+        `/api/cameras/${encodeURIComponent(cameraId)}/stream-config`
+      );
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const current = data.preferred
+        ? `${data.preferred[0]}x${data.preferred[1]}`
+        : `${img.naturalWidth}x${img.naturalHeight}`;
+      // Best-effort select if a matching option exists
+      for (const opt of resolutionSelect.options) {
+        if (opt.value === current) {
+          opt.selected = true;
+          break;
+        }
+      }
+    } catch (err) {
+      console.warn("stream-config fetch error:", err);
+    }
+  }
+
+  resolutionSelect.addEventListener("change", async () => {
+    const value = resolutionSelect.value;
+    const [w, h] = value.split("x").map((n) => parseInt(n, 10));
+    if (!w || !h) return;
+
+    changingResolution = true;
+    resolutionStatus.hidden = false;
+    resolutionStatus.classList.remove("error");
+    resolutionStatus.textContent = `해상도 변경하는 중 (${w}×${h})…`;
+
+    try {
+      const resp = await fetch(
+        `/api/cameras/${encodeURIComponent(cameraId)}/stream-config`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ width: w, height: h }),
+        }
+      );
+      if (!resp.ok) {
+        const detail = await safeDetail(resp);
+        throw new Error(detail);
+      }
+      // Server torn down active source. Re-establish the stream.
+      restartStream(`해상도 적용 중 (${w}×${h})…`);
+      // Hide hint once first frame at new resolution arrives.
+      img.addEventListener(
+        "load",
+        () => {
+          resolutionStatus.hidden = true;
+        },
+        { once: true }
+      );
+    } catch (err) {
+      resolutionStatus.classList.add("error");
+      resolutionStatus.textContent = `해상도 변경 실패: ${err.message}`;
+    } finally {
+      changingResolution = false;
+    }
   });
 
   // ---------------------------------------------------------------------
@@ -177,15 +248,14 @@
     } finally {
       captureBtn.disabled = false;
       capturing = false;
-      // Re-establish preview stream after capture's reopen-at-full-res cycle.
-      restartStream();
+      // Capture no longer tears down the stream — no restart needed.
     }
   });
 
-  function restartStream() {
+  function restartStream(statusText) {
     firstFrame = false;
     status.classList.remove("error");
-    status.textContent = "스트림 재연결 중…";
+    status.textContent = statusText || "스트림 재연결 중…";
     status.hidden = false;
     img.src = `/stream/${encodeURIComponent(cameraId)}?t=${Date.now()}`;
   }

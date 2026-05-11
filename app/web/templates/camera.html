@@ -20,6 +20,16 @@
     <aside class="control-panel">
       <h2 class="panel-title">컨트롤</h2>
 
+      <section class="control-group">
+        <h3 class="group-title">스트림 해상도</h3>
+        <select id="resolution-select">
+          {% for w, h in camera.capabilities.resolutions %}
+          <option value="{{ w }}x{{ h }}">{{ w }}×{{ h }}</option>
+          {% endfor %}
+        </select>
+        <p id="resolution-status" class="hint" hidden></p>
+      </section>
+
       <section class="control-group" id="focus-group">
         <div class="control-row">
           <label>포커스 모드</label>

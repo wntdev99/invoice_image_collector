@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from app.camera.errors import CameraBusy, CameraNotFound
 from app.capture.encoder import EncodingFailed
-from app.capture.service import CaptureFailed
+from app.capture.service import CaptureFailed, StreamNotActive
 from app.storage.naming import DEFAULT_EXTENSION
 
 
@@ -29,6 +29,8 @@ async def capture(camera_id: str, body: CaptureRequest, request: Request) -> dic
         result = await service.capture(camera_id, body.label, body.ext)
     except CameraNotFound:
         raise HTTPException(status_code=404, detail=f"camera not found: {camera_id}")
+    except StreamNotActive as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except CameraBusy as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except CaptureFailed as exc:

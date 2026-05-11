@@ -126,6 +126,16 @@ class FrameSource:
             raise StreamClosed()
         return self._latest_seq, self._latest_frame
 
+    def get_latest_frame(self) -> "np.ndarray | None":
+        """Synchronous copy of the most recent frame, or None if none yet captured.
+
+        Copies the array so a subsequent capture thread overwrite cannot race
+        with downstream encoding.
+        """
+        if self._closed or self._latest_frame is None:
+            return None
+        return self._latest_frame.copy()
+
     def close(self) -> None:
         """Synchronous close. Must be called from the event loop thread.
 

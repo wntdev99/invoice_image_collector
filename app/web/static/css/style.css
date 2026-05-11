@@ -289,3 +289,14 @@ body {
 
 #capture-status.success { color: #4ade80; }
 #capture-status.error { color: #ef4444; }
+
+#resolution-select {
+  width: 100%;
+  background: #2a2d34;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  color: #e8eaed;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+#resolution-status.error { color: #ef4444; }
