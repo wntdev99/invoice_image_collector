@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>촬영된 이미지 — {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="back-link">← 메인</a>
+    <h1>촬영된 이미지</h1>
+    <span id="counter" class="device-path">0장</span>
+  </header>
+  <main class="gallery-page">
+    <div class="gallery-toolbar">
+      <label class="toolbar-check">
+        <input type="checkbox" id="select-all" /> 전체 선택
+      </label>
+      <span id="selected-count" class="hint">0장 선택</span>
+      <span class="spacer"></span>
+      <button id="zip-btn" type="button" disabled>ZIP 다운로드</button>
+      <button id="delete-btn" type="button" class="danger" disabled>선택 삭제</button>
+    </div>
+    <p id="action-status" class="hint" hidden></p>
+    <div id="gallery-grid" class="gallery-grid"></div>
+    <p id="empty-msg" class="empty" hidden>저장된 이미지가 없습니다.</p>
+  </main>
+
+  <div id="lightbox" class="lightbox" hidden>
+    <button id="lightbox-close" type="button" aria-label="닫기">×</button>
+    <img id="lightbox-img" alt="원본" />
+    <div id="lightbox-info"></div>
+  </div>
+
+  <script src="{{ url_for('static', path='/js/gallery.js') }}" defer></script>
+</body>
+</html>
