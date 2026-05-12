@@ -12,6 +12,7 @@ import re
 import pyudev
 
 from app.camera.backends import v4l2 as v4l2_backend
+from app.camera.backends.v4l2 import has_color_format
 from app.camera.events import CameraAttached, CameraDetached
 from app.camera.models import Camera
 from app.camera.registry import CameraRegistry
@@ -55,6 +56,16 @@ def _device_to_camera(device: pyudev.Device) -> Camera | None:
     cam_id = _safe_id(vendor, product, serial or bus_path or device_path)
 
     capabilities = v4l2_backend.probe_capabilities(device_path)
+
+    # Skip depth/IR-only nodes (Z16, Y16, GREY etc.) — multi-stream cameras
+    # like Orbbec Gemini 336 expose several index=0 video nodes per physical
+    # device, and only the RGB one has a colour fourcc cv2 can decode.
+    if not has_color_format(capabilities.formats):
+        _log.info(
+            "discovery: skipping non-color node %s (formats=%s)",
+            device_path, list(capabilities.formats),
+        )
+        return None
 
     return Camera(
         id=cam_id,

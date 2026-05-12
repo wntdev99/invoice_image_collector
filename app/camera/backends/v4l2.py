@@ -199,6 +199,25 @@ def preferred_format(formats: tuple[str, ...]) -> str | None:
     return None
 
 
+# Whitelist of fourcc codes that represent a colour stream cv2.VideoCapture
+# can decode into BGR. Depth (Z16, INVZ) and IR (Y16, GREY, INVI) sensor nodes
+# expose only non-colour formats; we deliberately skip them at discovery so
+# multi-stream cameras like Orbbec Gemini 336 don't get registered through
+# their depth node.
+_COLOR_FOURCCS = frozenset({
+    "YUYV", "YUY2",
+    "MJPG", "MJPEG", "JPEG",
+    "NV12", "NV21",
+    "RGB3", "BGR3", "RGB24", "BGR24",
+    "YU12", "YV12", "I420",
+    "UYVY",
+})
+
+
+def has_color_format(formats: tuple[str, ...]) -> bool:
+    return any(f.strip().upper() in _COLOR_FOURCCS for f in formats)
+
+
 # ---------------------------------------------------------------------------
 # Streaming capture device (OpenCV V4L2 backend)
 # ---------------------------------------------------------------------------
