@@ -64,16 +64,6 @@ class FrameSource:
     def controller(self) -> CameraController:
         return self._controller
 
-    @property
-    def latest_seq(self) -> int:
-        """Monotonic counter incremented on each new frame from the capture thread.
-
-        Consumers can record this value, set a V4L2 ctrl, then wait until the
-        seq advances past ``recorded + N`` to be sure they're observing frames
-        captured *after* the ctrl was applied.
-        """
-        return self._latest_seq
-
     async def start(self) -> None:
         width, height = best_match_resolution(
             self._camera.capabilities.resolutions, self._target_resolution
