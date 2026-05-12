@@ -1,16 +1,26 @@
-"""REST endpoints for camera listing and details."""
+"""REST endpoints for camera listing, details, and enable/disable toggle."""
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 from app.camera.models import Camera
+from app.camera.registry import CameraRegistry
 
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/cameras", tags=["cameras"])
 
 
-def serialize_camera(camera: Camera) -> dict:
-    return {
+class CameraUpdate(BaseModel):
+    enabled: bool | None = None
+
+
+def serialize_camera(camera: Camera, registry: CameraRegistry | None = None) -> dict:
+    out: dict = {
         "id": camera.id,
         "device_path": camera.device_path,
         "name": camera.name,
@@ -48,12 +58,15 @@ def serialize_camera(camera: Camera) -> dict:
             "resolutions": [list(r) for r in camera.capabilities.resolutions],
         },
     }
+    if registry is not None:
+        out["enabled"] = not registry.is_disabled(camera.id)
+    return out
 
 
 @router.get("")
 async def list_cameras(request: Request) -> dict:
     registry = request.app.state.camera_registry
-    return {"cameras": [serialize_camera(c) for c in registry.list()]}
+    return {"cameras": [serialize_camera(c, registry) for c in registry.list()]}
 
 
 @router.get("/{camera_id}")
@@ -62,4 +75,20 @@ async def get_camera(camera_id: str, request: Request) -> dict:
     cam = registry.get(camera_id)
     if cam is None:
         raise HTTPException(status_code=404, detail=f"camera not found: {camera_id}")
-    return serialize_camera(cam)
+    return serialize_camera(cam, registry)
+
+
+@router.patch("/{camera_id}")
+async def patch_camera(camera_id: str, body: CameraUpdate, request: Request) -> dict:
+    registry = request.app.state.camera_registry
+    cam = registry.get(camera_id)
+    if cam is None:
+        raise HTTPException(status_code=404, detail=f"camera not found: {camera_id}")
+    if body.enabled is not None:
+        disabling = not body.enabled
+        registry.set_disabled(camera_id, disabling)
+        if disabling:
+            # Vacate V4L2 handle so other apps can claim it.
+            coord = request.app.state.stream_coordinator
+            await coord.force_close_active_if(camera_id)
+    return serialize_camera(cam, registry)

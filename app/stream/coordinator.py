@@ -14,7 +14,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from app.camera.errors import CameraNotFound
+from app.camera.errors import CameraDisabled, CameraNotFound
 from app.camera.frame_source import FrameSource
 from app.camera.registry import CameraRegistry
 
@@ -84,6 +84,8 @@ class StreamCoordinator:
             camera = self._registry.get(camera_id)
             if camera is None:
                 raise CameraNotFound(camera_id)
+            if self._registry.is_disabled(camera_id):
+                raise CameraDisabled(camera_id)
 
             resolution = self._resolution_for(camera_id)
             source = FrameSource(camera, loop, target_resolution=resolution)
@@ -118,6 +120,23 @@ class StreamCoordinator:
             yield source
         finally:
             await self.release(camera_id, source)
+
+    async def force_close_active_if(self, camera_id: str) -> bool:
+        """Close the active source only if it matches ``camera_id``.
+
+        Used when the user disables a camera that is currently streaming —
+        we vacate the V4L2 handle so another app can claim it immediately.
+        Returns True if a source was closed, False if no match.
+        """
+        async with self._lock:
+            if self._active_id != camera_id or self._active_source is None:
+                return False
+            _log.info("stream: closing active id=%s (camera disabled)", camera_id)
+            self._active_source.close()
+            self._active_source = None
+            self._active_id = None
+            self._refcount = 0
+            return True
 
     async def shutdown(self) -> None:
         async with self._lock:

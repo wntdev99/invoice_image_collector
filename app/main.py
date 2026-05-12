@@ -38,7 +38,9 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     bus = EventBus()
-    registry = CameraRegistry()
+    registry = CameraRegistry(
+        disabled_state_path=settings.storage_dir / ".disabled_cameras.json"
+    )
     discovery = CameraDiscovery(registry, bus)
     discovery.start(asyncio.get_running_loop())
     coordinator = StreamCoordinator(registry)

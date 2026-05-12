@@ -16,12 +16,14 @@
   }
 
   function renderCard(cam) {
+    const enabled = cam.enabled !== false;
     const card = document.createElement("article");
-    card.className = "card";
-    card.tabIndex = 0;
+    card.className = "card" + (enabled ? "" : " disabled");
+    card.tabIndex = enabled ? 0 : -1;
     card.dataset.cameraId = cam.id;
 
     const open = () => {
+      if (!enabled) return;
       window.location.href = `/cam/${encodeURIComponent(cam.id)}`;
     };
     card.addEventListener("click", open);
@@ -31,6 +33,19 @@
         open();
       }
     });
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "card-toggle" + (enabled ? "" : " off");
+    toggleBtn.textContent = enabled ? "사용" : "사용 안함";
+    toggleBtn.title = enabled
+      ? "이 카메라 비활성화 — V4L2 핸들 해제, 다른 앱이 사용 가능"
+      : "이 카메라 다시 활성화";
+    toggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleEnabled(cam, toggleBtn);
+    });
+    card.appendChild(toggleBtn);
 
     const title = document.createElement("h2");
     title.className = "card-title";
@@ -44,6 +59,11 @@
 
     const chips = document.createElement("div");
     chips.className = "chips";
+    if (!enabled) {
+      const dis = makeChip("사용 안함");
+      dis.classList.add("chip-disabled");
+      chips.appendChild(dis);
+    }
     const caps = cam.capabilities;
     if (caps.has_autofocus) chips.appendChild(makeChip("AF"));
     if (caps.has_manual_focus) chips.appendChild(makeChip("MF"));
@@ -53,6 +73,28 @@
     card.appendChild(chips);
 
     return card;
+  }
+
+  async function toggleEnabled(cam, button) {
+    const targetEnabled = cam.enabled === false;
+    button.disabled = true;
+    try {
+      const resp = await fetch(
+        `/api/cameras/${encodeURIComponent(cam.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: targetEnabled }),
+        }
+      );
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const updated = await resp.json();
+      cameras.set(updated.id, updated);
+      render();
+    } catch (err) {
+      console.error("toggle failed:", err);
+      button.disabled = false;
+    }
   }
 
   function makeChip(text) {

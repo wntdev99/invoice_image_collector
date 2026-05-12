@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.api.cameras import serialize_camera
 from app.config import settings
-from app.camera.errors import CameraBusy, CameraNotFound
+from app.camera.errors import CameraBusy, CameraDisabled, CameraNotFound
 from app.stream.mjpeg import MJPEGStreamProvider
 from app.web.templates import TEMPLATES
 
@@ -51,6 +51,11 @@ async def mjpeg_stream(camera_id: str, request: Request) -> StreamingResponse:
         source = await coord.acquire(camera_id, loop)
     except CameraNotFound:
         raise HTTPException(status_code=404, detail=f"camera not found: {camera_id}")
+    except CameraDisabled:
+        raise HTTPException(
+            status_code=409,
+            detail=f"camera is disabled (toggle it back on from the main page): {camera_id}",
+        )
     except CameraBusy as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 

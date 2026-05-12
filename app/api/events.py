@@ -21,9 +21,9 @@ router = APIRouter(tags=["events"])
 KEEPALIVE_SECONDS = 15.0
 
 
-def _encode_event(event: Any) -> str | None:
+def _encode_event(event: Any, registry) -> str | None:
     if isinstance(event, CameraAttached):
-        payload = json.dumps(serialize_camera(event.camera))
+        payload = json.dumps(serialize_camera(event.camera, registry))
         return f"event: camera_attached\ndata: {payload}\n\n"
     if isinstance(event, CameraDetached):
         payload = json.dumps({"camera_id": event.camera_id})
@@ -34,6 +34,7 @@ def _encode_event(event: Any) -> str | None:
 @router.get("/events")
 async def stream_events(request: Request) -> StreamingResponse:
     bus = request.app.state.event_bus
+    registry = request.app.state.camera_registry
 
     async def event_stream() -> AsyncIterator[str]:
         with bus.subscribe() as q:
@@ -44,7 +45,7 @@ async def stream_events(request: Request) -> StreamingResponse:
                 except asyncio.TimeoutError:
                     yield ": keep-alive\n\n"
                     continue
-                payload = _encode_event(event)
+                payload = _encode_event(event, registry)
                 if payload is not None:
                     yield payload
 

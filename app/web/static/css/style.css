@@ -45,18 +45,60 @@ body {
 }
 
 .card {
+  position: relative;
   background: #1a1d24;
   border: 1px solid #2a2d34;
   border-radius: 8px;
   padding: 16px;
   cursor: pointer;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.15s, transform 0.15s, opacity 0.15s;
 }
 .card:hover,
 .card:focus-visible {
   border-color: #4a90e2;
   outline: none;
   transform: translateY(-1px);
+}
+.card.disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.card.disabled:hover {
+  border-color: #2a2d34;
+  transform: none;
+}
+
+.card-toggle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 10px;
+  color: #c0c4cc;
+  cursor: pointer;
+  z-index: 2;
+  font-family: inherit;
+}
+.card-toggle:hover:not(:disabled) {
+  background: #2a2d34;
+  color: #e8eaed;
+}
+.card-toggle.off {
+  background: #2a2d34;
+  border-color: #4a4d54;
+  color: #9aa0a6;
+}
+.card-toggle:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.chip-disabled {
+  background: #3a1d1d;
+  color: #f88;
 }
 
 .card-title {
