@@ -204,6 +204,11 @@ class WgwkCaptureDevice:
         self._af_state: bool = False
         self._focus_lock = threading.Lock()  # focus 명령 직렬화
         self._zoom_lock = threading.Lock()
+        # cv2 FFMPEG backend는 cap.read()가 진행 중일 때 다른 thread에서
+        # cap.release()를 호출하면 av_read_frame이 freed 구조체에 접근해
+        # SIGSEGV. read와 release를 lock으로 직렬화하고 read에 timeout을
+        # 설정해 release 대기 시간을 bound.
+        self._cap_lock = threading.Lock()
 
     @property
     def device_path(self) -> str:
@@ -267,6 +272,12 @@ class WgwkCaptureDevice:
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         except Exception:
             pass
+        # FFMPEG read timeout — cap.read()가 무한 block되지 않도록.
+        # 안전한 release 직렬화를 위해 필요 (release 대기 시간 bound).
+        try:
+            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 1000)
+        except Exception:
+            pass
 
         actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -291,17 +302,27 @@ class WgwkCaptureDevice:
         return self._negotiated
 
     def read(self) -> "tuple[bool, np.ndarray | None]":
-        if self._cap is None:
-            return False, None
-        return self._cap.read()
+        # Snapshot reference outside lock; if release() flipped _cap to None,
+        # the snapshot is still a valid object — but to prevent concurrent
+        # cap.release() while av_read_frame is in flight, hold the lock for
+        # the entire read.
+        with self._cap_lock:
+            cap = self._cap
+            if cap is None:
+                return False, None
+            return cap.read()
 
     def release(self) -> None:
-        if self._cap is not None:
-            try:
-                self._cap.release()
-            except Exception:
-                pass
+        # Lock 동안 cv2 cap을 release. 진행 중인 read()가 끝날 때까지 대기.
+        # read timeout이 설정되어 있어 worst case 1초 내에 끝남.
+        with self._cap_lock:
+            cap = self._cap
             self._cap = None
+            if cap is not None:
+                try:
+                    cap.release()
+                except Exception:
+                    pass
         if self._cam is not None:
             try:
                 self._cam.close()
