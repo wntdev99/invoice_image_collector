@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -243,29 +244,75 @@ class WgwkCaptureDevice:
             ) from e
 
         # 1. HAPI login (cam.admin / focus / zoom 명령용)
-        try:
-            self._cam = WgwkCam(
-                self._config.host,
-                username=self._config.username,
-                password=self._config.password,
-                scf_userid=self._config.scf_userid,
-                scf_passwd=self._config.scf_passwd,
-                auto_login=True,
-            )
-        except Exception as e:
+        # 빠른 연속 open/close 시 카메라 HTTP server가 일시적으로 느려져
+        # read timeout이 발생할 수 있어 재시도 도입.
+        login_err = None
+        for attempt in range(3):
+            try:
+                self._cam = WgwkCam(
+                    self._config.host,
+                    username=self._config.username,
+                    password=self._config.password,
+                    scf_userid=self._config.scf_userid,
+                    scf_passwd=self._config.scf_passwd,
+                    auto_login=True,
+                )
+                if attempt > 0:
+                    _log.info("wgwk HAPI login succeeded on retry %d", attempt + 1)
+                break
+            except Exception as e:
+                login_err = e
+                _log.warning("wgwk HAPI login attempt %d failed (%s): %s",
+                             attempt + 1, self._config.host, e)
+                self._cam = None
+                if attempt < 2:
+                    time.sleep(1.5)  # 카메라 firmware backoff 회복 대기
+        if self._cam is None:
+            _log.error("wgwk HAPI login exhausted retries for %s: %s",
+                       self._config.host, login_err)
             raise CameraBusy(
-                f"failed to login to wgwk camera {self._config.host}: {e}"
-            ) from e
+                f"failed to login to wgwk camera {self._config.host} "
+                f"after 3 attempts: {login_err}"
+            ) from login_err
 
-        # 2. RTSP open
+        # 2. RTSP open. cv2 FFMPEG가 카메라 측 RTSP TEARDOWN 후 즉시 재연결을
+        # 항상 받지는 않음 (camera firmware 가 이전 세션을 잠시 유지). 짧은
+        # retry로 회복 가능한 일시적 reject 흡수.
         url = self._cam.video_main().url
-        cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-        if not cap.isOpened():
-            self._cam.close()
+        cap = None
+        rtsp_err = None
+        for attempt in range(3):
+            # OPEN_TIMEOUT으로 RTSP 연결 시도 시간 bound (default 무한)
+            os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS",
+                                  "rtsp_transport;tcp|stimeout;5000000")
+            cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
+            try:
+                cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+            except Exception:
+                pass
+            if cap.isOpened():
+                if attempt > 0:
+                    _log.info("wgwk RTSP opened on retry %d", attempt + 1)
+                break
+            try:
+                cap.release()
+            except Exception:
+                pass
+            cap = None
+            rtsp_err = f"cv2.VideoCapture.isOpened() == False on attempt {attempt + 1}"
+            _log.warning("wgwk RTSP open attempt %d failed (%s), retrying in 0.8s",
+                         attempt + 1, self._config.host)
+            time.sleep(0.8)
+
+        if cap is None or not cap.isOpened():
+            try:
+                self._cam.close()
+            except Exception:
+                pass
             self._cam = None
             raise CameraBusy(
                 f"failed to open RTSP stream from {self._config.host} "
-                "(network unreachable or stream limit reached?)"
+                f"after 3 attempts: {rtsp_err}"
             )
         # latency 최소화
         try:
@@ -329,6 +376,11 @@ class WgwkCaptureDevice:
             except Exception:
                 pass
             self._cam = None
+        # 카메라 측 cleanup 시간 — firmware가 RTSP TCP 슬롯과 HAPI 세션을
+        # 비우기까지 약간 시간이 걸린다. 이 wait 없이 즉시 새 open 시도하면
+        # HAPI login이 read timeout 받거나 RTSP open이 reject당함.
+        # 실측: ~1초가 안정적 회복에 필요 (0.5초도 가능하나 marginal).
+        time.sleep(1.0)
         _log.info("wgwk released: host=%s", self._config.host)
 
     # ----- focus -----
