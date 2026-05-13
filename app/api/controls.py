@@ -23,6 +23,7 @@ class ControlsUpdate(BaseModel):
     autofocus: bool | None = None
     zoom: int | None = None             # absolute mode 슬라이더
     zoom_step: str | None = None        # relative mode: "in"/"out"/"stop"
+    zoom_step_ms: int | None = None     # relative mode motor 명령 duration (선택)
     power_line_frequency: int | None = None
 
 
@@ -61,7 +62,9 @@ async def patch_controls(
     if body.zoom is not None:
         applied["zoom"] = source.controller.set_zoom(body.zoom)
     if body.zoom_step is not None:
-        applied["zoom_step"] = source.controller.zoom_step(body.zoom_step)
+        applied["zoom_step"] = source.controller.zoom_step(
+            body.zoom_step, duration_ms=body.zoom_step_ms
+        )
     if body.power_line_frequency is not None:
         applied["power_line_frequency"] = source.controller.set_power_line_frequency(
             body.power_line_frequency

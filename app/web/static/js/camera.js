@@ -43,8 +43,15 @@
   let pendingZoom = null;
   let zoomInFlight = false;
   // Relative mode press-and-hold state.
-  let zoomHoldTimer = null;
-  let zoomHoldDir = null;
+  // Tap (< 300ms): 미세 1 KF step (200ms 모터 명령).
+  // Hold (>= 300ms): 연속 모션 (4500ms autostop + 3.5초마다 재발사).
+  const ZOOM_TAP_MS = 200;        // motor command duration for a brief tap (~1 KF)
+  const ZOOM_HOLD_DELAY_MS = 300; // tap → hold 승격 임계
+  const ZOOM_HOLD_REFRESH_MS = 3500; // 4500ms autostop에 1초 여유
+  let zoomHoldDir = null;          // 현재 누르고 있는 방향
+  let zoomHoldUpgradeTimer = null; // tap → hold 승격 setTimeout
+  let zoomHoldRefreshTimer = null; // hold 모드 setInterval
+  let zoomEnteredHoldMode = false; // true이면 release 시 zoom_step:stop 필요
 
   img.addEventListener("load", () => {
     if (!firstFrame) {
@@ -301,19 +308,24 @@
     drainZoom();
   });
 
-  // ─── Relative zoom press-and-hold ────────────────────────────────
-  // Press: 즉시 zoom_step 발사 (서버가 4500ms autostop 모터 명령) +
-  //        3.5s마다 재발사하여 hold 지속.
-  // Release: zoom_step:stop 즉시 발사.
+  // ─── Relative zoom: tap vs hold ───────────────────────────────────
+  // 짧은 tap (< 300ms): 200ms 모터 명령으로 ~1 KF 미세 step. 별도 stop 불필요
+  //                     (HAPI autostop으로 motor 스스로 정지).
+  // 길게 hold (≥ 300ms): 4500ms autostop으로 연속 모션, 3.5s마다 재발사로 유지.
+  //                       release 시 zoom_step:"stop" 으로 즉시 정지.
 
-  async function postZoomStep(direction) {
+  async function postZoomStep(direction, durationMs) {
+    const body = { zoom_step: direction };
+    if (durationMs !== undefined && durationMs !== null) {
+      body.zoom_step_ms = durationMs;
+    }
     try {
       const resp = await fetch(
         `/api/cameras/${encodeURIComponent(cameraId)}/controls`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ zoom_step: direction }),
+          body: JSON.stringify(body),
         }
       );
       if (!resp.ok) {
@@ -332,45 +344,57 @@
     }
   }
 
-  function zoomHoldStart(direction, btn) {
-    if (zoomHoldTimer !== null) return;
+  function zoomPressStart(direction, btn) {
+    if (zoomHoldDir !== null) return;
     zoomHoldDir = direction;
+    zoomEnteredHoldMode = false;
     btn.classList.add("active");
-    postZoomStep(direction);
-    // 4500ms autostop이라 motor는 4.5s 동작. 3.5s마다 재발사하여 1s 여유.
-    zoomHoldTimer = setInterval(() => {
-      if (zoomHoldDir !== null) postZoomStep(zoomHoldDir);
-    }, 3500);
+
+    // 1) 즉시 미세 1 KF step 발사 (200ms autostop). HAPI가 자동으로 stop.
+    postZoomStep(direction, ZOOM_TAP_MS);
+
+    // 2) 300ms 후에도 누르고 있으면 hold 모드로 승격: 4500ms 연속 발사
+    zoomHoldUpgradeTimer = setTimeout(() => {
+      zoomEnteredHoldMode = true;
+      postZoomStep(direction);  // duration 생략 → 서버 기본 4500ms
+      zoomHoldRefreshTimer = setInterval(() => {
+        if (zoomHoldDir !== null) postZoomStep(zoomHoldDir);
+      }, ZOOM_HOLD_REFRESH_MS);
+    }, ZOOM_HOLD_DELAY_MS);
   }
 
-  function zoomHoldStop() {
-    if (zoomHoldTimer !== null) {
-      clearInterval(zoomHoldTimer);
-      zoomHoldTimer = null;
+  function zoomPressEnd() {
+    if (zoomHoldDir === null) return;
+    if (zoomHoldUpgradeTimer !== null) {
+      clearTimeout(zoomHoldUpgradeTimer);
+      zoomHoldUpgradeTimer = null;
+    }
+    if (zoomHoldRefreshTimer !== null) {
+      clearInterval(zoomHoldRefreshTimer);
+      zoomHoldRefreshTimer = null;
+    }
+    // hold 모드까지 진입했으면 명시적 stop이 필요. tap만이라면 motor가 200ms
+    // autostop으로 자동 정지하므로 stop 명령은 불필요(오히려 다음 tap을 방해함).
+    if (zoomEnteredHoldMode) {
+      postZoomStep("stop");
     }
     zoomHoldDir = null;
+    zoomEnteredHoldMode = false;
     zoomInBtn.classList.remove("active");
     zoomOutBtn.classList.remove("active");
-    postZoomStep("stop");
   }
 
-  // Pointer events (마우스·터치 통합). pointerleave/cancel도 stop으로 처리.
+  // Pointer events (마우스·터치 통합).
   for (const [btn, dir] of [[zoomInBtn, "in"], [zoomOutBtn, "out"]]) {
     btn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       btn.setPointerCapture(e.pointerId);
-      zoomHoldStart(dir, btn);
+      zoomPressStart(dir, btn);
     });
-    btn.addEventListener("pointerup", () => zoomHoldStop());
-    btn.addEventListener("pointercancel", () => zoomHoldStop());
+    btn.addEventListener("pointerup", () => zoomPressEnd());
+    btn.addEventListener("pointercancel", () => zoomPressEnd());
     btn.addEventListener("pointerleave", () => {
-      // pointercapture가 있으면 leave는 발생 안 함. 안전망.
-      if (zoomHoldDir === dir) zoomHoldStop();
-    });
-    // 키보드 접근성 — Space/Enter 누르면 짧은 step
-    btn.addEventListener("click", (e) => {
-      // pointerup이 이미 발화했으면 click은 따로 처리 안 함
-      if (zoomHoldTimer !== null) return;
+      if (zoomHoldDir === dir) zoomPressEnd();
     });
   }
 

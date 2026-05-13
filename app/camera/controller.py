@@ -80,14 +80,21 @@ class CameraController:
         clamped = max(self._caps.zoom.min, min(self._caps.zoom.max, value))
         return setter(clamped)
 
-    def zoom_step(self, direction: str) -> dict | None:
-        """Relative zoom press-and-hold. direction: ``"in"``/``"out"``/``"stop"``."""
+    def zoom_step(self, direction: str, duration_ms: int | None = None) -> dict | None:
+        """Relative zoom press-and-hold.
+
+        Args:
+            direction: ``"in"``/``"out"``/``"stop"``.
+            duration_ms: Optional motor command duration in ms.
+                ``None`` → backend default (continuous hold, ~4500ms).
+                작은 값(~200ms)은 1 KF 수준 미세 step.
+        """
         if self._caps.zoom is None or self._caps.zoom.mode != "relative":
             return None
         stepper = getattr(self._device, "zoom_step", None)
         if stepper is None:
             return None
-        return stepper(direction)
+        return stepper(direction, duration_ms=duration_ms)
 
     def set_power_line_frequency(self, value: int) -> int | None:
         if self._caps.power_line_frequency is None:

@@ -473,17 +473,23 @@ class WgwkCaptureDevice:
             self._zoom_pos = target
         return self._zoom_pos
 
-    def zoom_step(self, direction: str) -> dict:
-        """Relative zoom — press-and-hold start/stop.
+    def zoom_step(self, direction: str, duration_ms: int | None = None) -> dict:
+        """Relative zoom — press-and-hold start/stop with optional duration.
 
         ``direction``:
-          - ``"in"`` / ``"out"``: 모터에 4500ms autostop 명령 발사. HAPI ack는
-            ~1초 후 return하지만 motor는 ms 동안 계속 회전. JS는 hold 중
-            ~3초마다 재호출하여 연속 모션 유지.
+          - ``"in"`` / ``"out"``: 모터에 ``duration_ms`` autostop 명령 발사.
+            기본값 4500ms (HAPI 단일 명령 cap 안에서 최대). JS는 짧은 tap
+            시 ~200ms를 보내 미세 step(≈1 KF), 길게 hold 시 4500ms로 연속
+            모션을 유지한다.
           - ``"stop"``: 즉시 모터 정지 (zoom_stop).
 
+        ``duration_ms``:
+          - ``None`` 또는 미지정: 기본 4500ms (continuous hold).
+          - 정수: ``[50, 4500]`` 클램프. 200ms ≈ 1 KF (185ms/KF 기준).
+          - ``"stop"`` direction에서는 무시됨.
+
         Returns:
-            ``{"ok": bool, "direction": str, "estimate_kf": int|None}``.
+            ``{"ok": bool, "direction": str, "estimate_kf": int|None, "duration_ms": int}``.
         """
         if self._cap is None or self._cam is None:
             return {"ok": False, "reason": "device not open"}
@@ -491,21 +497,27 @@ class WgwkCaptureDevice:
             try:
                 if direction == "stop":
                     self._cam.zoom_stop()
-                elif direction == "in":
-                    # 4500ms autostop — HAPI 단일 명령 cap 안에서 최대.
-                    self._cam.zoom_in(4500)
-                    self._zoom_pos = min(_ZOOM_MAX,
-                                          self._zoom_pos + int(4500 / 185))
-                elif direction == "out":
-                    self._cam.zoom_out(4500)
-                    self._zoom_pos = max(_ZOOM_MIN,
-                                          self._zoom_pos - int(4500 / 185))
-                else:
+                    return {"ok": True, "direction": "stop",
+                            "estimate_kf": self._zoom_pos}
+                if direction not in ("in", "out"):
                     return {"ok": False, "reason": f"invalid direction {direction!r}"}
+
+                ms = 4500 if duration_ms is None else max(50, min(4500, int(duration_ms)))
+                ms_per_kf = float(getattr(self._cam._zoom, "ms_per_kf", 185.0))
+                kf_delta = max(1, int(round(ms / ms_per_kf)))
+
+                if direction == "in":
+                    self._cam.zoom_in(ms)
+                    self._zoom_pos = min(_ZOOM_MAX, self._zoom_pos + kf_delta)
+                else:
+                    self._cam.zoom_out(ms)
+                    self._zoom_pos = max(_ZOOM_MIN, self._zoom_pos - kf_delta)
             except Exception as e:
-                _log.warning("wgwk zoom_step(%s) failed: %s", direction, e)
+                _log.warning("wgwk zoom_step(%s, ms=%s) failed: %s",
+                             direction, duration_ms, e)
                 return {"ok": False, "reason": str(e)}
-        return {"ok": True, "direction": direction, "estimate_kf": self._zoom_pos}
+        return {"ok": True, "direction": direction,
+                "estimate_kf": self._zoom_pos, "duration_ms": ms}
 
     # ----- power_line_frequency: not applicable -----
 
