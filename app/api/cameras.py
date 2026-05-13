@@ -47,6 +47,7 @@ def serialize_camera(camera: Camera, registry: CameraRegistry | None = None) -> 
                     "max": camera.capabilities.zoom.max,
                     "step": camera.capabilities.zoom.step,
                     "default": camera.capabilities.zoom.default,
+                    "mode": camera.capabilities.zoom.mode,
                 }
                 if camera.capabilities.zoom is not None
                 else None

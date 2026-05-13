@@ -52,10 +52,16 @@
 
       <section class="control-group" id="zoom-group" hidden>
         <div class="control-row">
-          <label for="zoom-slider">광학 줌</label>
-          <output id="zoom-value" for="zoom-slider">-</output>
+          <label>광학 줌</label>
+          <output id="zoom-value">-</output>
         </div>
-        <input type="range" id="zoom-slider" disabled />
+        <!-- absolute mode: slider -->
+        <input type="range" id="zoom-slider" disabled hidden />
+        <!-- relative mode: -/+ buttons (press-and-hold) -->
+        <div id="zoom-buttons" class="zoom-buttons" hidden>
+          <button id="zoom-out-btn" type="button" title="줌 아웃 (누르고 있으면 계속)">−</button>
+          <button id="zoom-in-btn" type="button" title="줌 인 (누르고 있으면 계속)">+</button>
+        </div>
         <p id="zoom-hint" class="hint" hidden></p>
       </section>
 

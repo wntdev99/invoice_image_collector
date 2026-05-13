@@ -14,16 +14,22 @@ class FocusRange:
 
 @dataclass(frozen=True, slots=True)
 class ZoomRange:
-    """Optical zoom 컨트롤 범위.
+    """Optical zoom 컨트롤 범위 + 동작 모드.
 
-    USB UVC ``zoom_absolute`` (Logitech PTZ Pro 등) 또는 IP 카메라
-    (WGWK-AS500J KF 카운터 등) 양쪽 모두 매핑. 슬라이더 단위는 backend별
-    의미가 다르므로 (V4L2: ctrl 정수, WGWK: KF) backend가 결정.
+    ``mode``:
+      - ``"absolute"``: 슬라이더 UI. 카메라가 절대 위치를 readback할 수 있을 때
+        (V4L2 ``zoom_absolute``, Logitech PTZ Pro 등).
+      - ``"relative"``: -/+ 버튼 UI (press-and-hold continuous motion). 카메라가
+        절대 위치 readback이 불가하거나 모터 시간 기반 제어일 때 (WGWK-AS500J).
+
+    ``min``/``max``/``step``/``default``는 absolute 모드에서 슬라이더 범위로
+    사용되고, relative 모드에서는 OSD 표시 또는 추정값 참고용으로만 의미.
     """
     min: int
     max: int
     step: int
     default: int
+    mode: str = "absolute"
 
 
 @dataclass(frozen=True, slots=True)

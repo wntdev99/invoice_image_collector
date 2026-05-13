@@ -47,6 +47,7 @@ class CameraController:
                 "max": self._caps.zoom.max,
                 "step": self._caps.zoom.step,
                 "default": self._caps.zoom.default,
+                "mode": self._caps.zoom.mode,
             }
         if self._caps.power_line_frequency is not None:
             plf = self._caps.power_line_frequency
@@ -71,13 +72,22 @@ class CameraController:
         return self._device.set_autofocus(enabled)
 
     def set_zoom(self, value: int) -> int | None:
-        if self._caps.zoom is None:
+        if self._caps.zoom is None or self._caps.zoom.mode != "absolute":
             return None
         setter = getattr(self._device, "set_zoom", None)
         if setter is None:
             return None
         clamped = max(self._caps.zoom.min, min(self._caps.zoom.max, value))
         return setter(clamped)
+
+    def zoom_step(self, direction: str) -> dict | None:
+        """Relative zoom press-and-hold. direction: ``"in"``/``"out"``/``"stop"``."""
+        if self._caps.zoom is None or self._caps.zoom.mode != "relative":
+            return None
+        stepper = getattr(self._device, "zoom_step", None)
+        if stepper is None:
+            return None
+        return stepper(direction)
 
     def set_power_line_frequency(self, value: int) -> int | None:
         if self._caps.power_line_frequency is None:

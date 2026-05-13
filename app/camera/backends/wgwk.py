@@ -117,6 +117,7 @@ def build_camera_model(cfg: WgwkConfig, camera_id: str | None = None) -> Camera:
             zoom=ZoomRange(
                 min=_ZOOM_MIN, max=_ZOOM_MAX,
                 step=_ZOOM_STEP, default=_ZOOM_DEFAULT,
+                mode="relative",
             ),
             power_line_frequency=None,
             formats=(),       # RTSP는 카메라가 결정
@@ -471,6 +472,40 @@ class WgwkCaptureDevice:
                 return self._zoom_pos
             self._zoom_pos = target
         return self._zoom_pos
+
+    def zoom_step(self, direction: str) -> dict:
+        """Relative zoom — press-and-hold start/stop.
+
+        ``direction``:
+          - ``"in"`` / ``"out"``: 모터에 4500ms autostop 명령 발사. HAPI ack는
+            ~1초 후 return하지만 motor는 ms 동안 계속 회전. JS는 hold 중
+            ~3초마다 재호출하여 연속 모션 유지.
+          - ``"stop"``: 즉시 모터 정지 (zoom_stop).
+
+        Returns:
+            ``{"ok": bool, "direction": str, "estimate_kf": int|None}``.
+        """
+        if self._cap is None or self._cam is None:
+            return {"ok": False, "reason": "device not open"}
+        with self._zoom_lock:
+            try:
+                if direction == "stop":
+                    self._cam.zoom_stop()
+                elif direction == "in":
+                    # 4500ms autostop — HAPI 단일 명령 cap 안에서 최대.
+                    self._cam.zoom_in(4500)
+                    self._zoom_pos = min(_ZOOM_MAX,
+                                          self._zoom_pos + int(4500 / 185))
+                elif direction == "out":
+                    self._cam.zoom_out(4500)
+                    self._zoom_pos = max(_ZOOM_MIN,
+                                          self._zoom_pos - int(4500 / 185))
+                else:
+                    return {"ok": False, "reason": f"invalid direction {direction!r}"}
+            except Exception as e:
+                _log.warning("wgwk zoom_step(%s) failed: %s", direction, e)
+                return {"ok": False, "reason": str(e)}
+        return {"ok": True, "direction": direction, "estimate_kf": self._zoom_pos}
 
     # ----- power_line_frequency: not applicable -----
 

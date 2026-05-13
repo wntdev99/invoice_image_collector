@@ -16,6 +16,9 @@
   const zoomSlider = document.getElementById("zoom-slider");
   const zoomValue = document.getElementById("zoom-value");
   const zoomHint = document.getElementById("zoom-hint");
+  const zoomButtons = document.getElementById("zoom-buttons");
+  const zoomInBtn = document.getElementById("zoom-in-btn");
+  const zoomOutBtn = document.getElementById("zoom-out-btn");
   const labelInput = document.getElementById("label-input");
   const extSelect = document.getElementById("ext-select");
   const captureBtn = document.getElementById("capture-btn");
@@ -36,9 +39,12 @@
   // In-flight adaptive pattern for focus slider.
   let pendingFocus = null;
   let inFlight = false;
-  // Same pattern for optical zoom slider.
+  // Same pattern for optical zoom slider (absolute mode).
   let pendingZoom = null;
   let zoomInFlight = false;
+  // Relative mode press-and-hold state.
+  let zoomHoldTimer = null;
+  let zoomHoldDir = null;
 
   img.addEventListener("load", () => {
     if (!firstFrame) {
@@ -184,12 +190,24 @@
     }
 
     if (data.zoom) {
-      zoomSlider.min = data.zoom.min;
-      zoomSlider.max = data.zoom.max;
-      zoomSlider.step = data.zoom.step;
-      zoomSlider.value = data.zoom.value ?? data.zoom.default;
-      zoomSlider.disabled = false;
-      zoomValue.textContent = zoomSlider.value;
+      const mode = data.zoom.mode || "absolute";
+      if (mode === "absolute") {
+        zoomSlider.min = data.zoom.min;
+        zoomSlider.max = data.zoom.max;
+        zoomSlider.step = data.zoom.step;
+        zoomSlider.value = data.zoom.value ?? data.zoom.default;
+        zoomSlider.disabled = false;
+        zoomSlider.hidden = false;
+        zoomButtons.hidden = true;
+        zoomValue.textContent = zoomSlider.value;
+      } else {
+        // relative — -/+ buttons
+        zoomSlider.hidden = true;
+        zoomButtons.hidden = false;
+        zoomInBtn.disabled = false;
+        zoomOutBtn.disabled = false;
+        zoomValue.textContent = data.zoom.value ?? "−";
+      }
       zoomGroup.hidden = false;
     } else {
       zoomGroup.hidden = true;
@@ -282,6 +300,79 @@
     pendingZoom = value;
     drainZoom();
   });
+
+  // ─── Relative zoom press-and-hold ────────────────────────────────
+  // Press: 즉시 zoom_step 발사 (서버가 4500ms autostop 모터 명령) +
+  //        3.5s마다 재발사하여 hold 지속.
+  // Release: zoom_step:stop 즉시 발사.
+
+  async function postZoomStep(direction) {
+    try {
+      const resp = await fetch(
+        `/api/cameras/${encodeURIComponent(cameraId)}/controls`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zoom_step: direction }),
+        }
+      );
+      if (!resp.ok) {
+        console.warn("zoom_step PATCH failed:", resp.status);
+        return null;
+      }
+      const data = await resp.json();
+      const result = data.zoom_step;
+      if (result && result.estimate_kf !== undefined && result.estimate_kf !== null) {
+        zoomValue.textContent = result.estimate_kf;
+      }
+      return result;
+    } catch (err) {
+      console.error("zoom_step PATCH error:", err);
+      return null;
+    }
+  }
+
+  function zoomHoldStart(direction, btn) {
+    if (zoomHoldTimer !== null) return;
+    zoomHoldDir = direction;
+    btn.classList.add("active");
+    postZoomStep(direction);
+    // 4500ms autostop이라 motor는 4.5s 동작. 3.5s마다 재발사하여 1s 여유.
+    zoomHoldTimer = setInterval(() => {
+      if (zoomHoldDir !== null) postZoomStep(zoomHoldDir);
+    }, 3500);
+  }
+
+  function zoomHoldStop() {
+    if (zoomHoldTimer !== null) {
+      clearInterval(zoomHoldTimer);
+      zoomHoldTimer = null;
+    }
+    zoomHoldDir = null;
+    zoomInBtn.classList.remove("active");
+    zoomOutBtn.classList.remove("active");
+    postZoomStep("stop");
+  }
+
+  // Pointer events (마우스·터치 통합). pointerleave/cancel도 stop으로 처리.
+  for (const [btn, dir] of [[zoomInBtn, "in"], [zoomOutBtn, "out"]]) {
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      btn.setPointerCapture(e.pointerId);
+      zoomHoldStart(dir, btn);
+    });
+    btn.addEventListener("pointerup", () => zoomHoldStop());
+    btn.addEventListener("pointercancel", () => zoomHoldStop());
+    btn.addEventListener("pointerleave", () => {
+      // pointercapture가 있으면 leave는 발생 안 함. 안전망.
+      if (zoomHoldDir === dir) zoomHoldStop();
+    });
+    // 키보드 접근성 — Space/Enter 누르면 짧은 step
+    btn.addEventListener("click", (e) => {
+      // pointerup이 이미 발화했으면 click은 따로 처리 안 함
+      if (zoomHoldTimer !== null) return;
+    });
+  }
 
   async function drainZoom() {
     if (zoomInFlight || pendingZoom === null) return;
