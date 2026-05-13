@@ -258,12 +258,14 @@ body {
   font-size: 13px;
   color: #c0c4cc;
 }
-#focus-slider {
+#focus-slider,
+#zoom-slider {
   width: 100%;
   margin: 4px 0 0 0;
   accent-color: #4a90e2;
 }
-#focus-slider:disabled {
+#focus-slider:disabled,
+#zoom-slider:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
@@ -286,7 +288,8 @@ body {
   border-color: #4a90e2;
   color: white;
 }
-#focus-value {
+#focus-value,
+#zoom-value {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   font-size: 13px;
   color: #e8eaed;

@@ -13,6 +13,20 @@ class FocusRange:
 
 
 @dataclass(frozen=True, slots=True)
+class ZoomRange:
+    """Optical zoom 컨트롤 범위.
+
+    USB UVC ``zoom_absolute`` (Logitech PTZ Pro 등) 또는 IP 카메라
+    (WGWK-AS500J KF 카운터 등) 양쪽 모두 매핑. 슬라이더 단위는 backend별
+    의미가 다르므로 (V4L2: ctrl 정수, WGWK: KF) backend가 결정.
+    """
+    min: int
+    max: int
+    step: int
+    default: int
+
+
+@dataclass(frozen=True, slots=True)
 class PowerLineFrequency:
     """V4L2 ``power_line_frequency`` menu control range + options."""
     min: int
@@ -26,6 +40,7 @@ class Capabilities:
     has_autofocus: bool        # exposes V4L2 AF/MF mode toggle
     has_manual_focus: bool     # exposes focus_absolute (or equivalent) control
     focus: FocusRange | None = None
+    zoom: ZoomRange | None = None     # optical zoom (V4L2 zoom_absolute or IP zoom)
     power_line_frequency: PowerLineFrequency | None = None
     formats: tuple[str, ...] = ()
     resolutions: tuple[tuple[int, int], ...] = ()

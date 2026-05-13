@@ -1,4 +1,4 @@
-"""REST endpoints for live camera controls (focus, autofocus).
+"""REST endpoints for live camera controls (focus, autofocus, zoom).
 
 Controls are only addressable while the camera is the *active* streaming
 camera — otherwise we'd need to open/close the V4L2 device behind the
@@ -21,6 +21,7 @@ router = APIRouter(prefix="/api/cameras", tags=["controls"])
 class ControlsUpdate(BaseModel):
     focus: int | None = None
     autofocus: bool | None = None
+    zoom: int | None = None
     power_line_frequency: int | None = None
 
 
@@ -56,6 +57,8 @@ async def patch_controls(
     if body.autofocus is not None:
         actual_af = source.controller.set_autofocus(body.autofocus)
         applied["autofocus"] = actual_af
+    if body.zoom is not None:
+        applied["zoom"] = source.controller.set_zoom(body.zoom)
     if body.power_line_frequency is not None:
         applied["power_line_frequency"] = source.controller.set_power_line_frequency(
             body.power_line_frequency

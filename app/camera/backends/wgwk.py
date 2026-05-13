@@ -31,7 +31,7 @@ import cv2
 
 from app.camera.errors import CameraBusy
 from app.camera.events import CameraAttached
-from app.camera.models import Camera, Capabilities, FocusRange
+from app.camera.models import Camera, Capabilities, FocusRange, ZoomRange
 
 if TYPE_CHECKING:
     import numpy as np
@@ -51,6 +51,13 @@ _FOCUS_STEP = 1
 # 한 카운터 단위당 HAPI focus 명령 시간. 50ms × 100 units = 5s 전체 sweep.
 # 실측: focus 명령 1회 500ms ≈ focus 10 unit 변화 정도.
 _MS_PER_FOCUS_UNIT = 50
+
+# Optical zoom 범위 = KF 카운터 (AS500J: 1=wide, 36=tele, 광학 1x~10x).
+# wgwk_camera.ZoomTracker.max_kf와 동일. 슬라이더 1 unit = 1 KF = ~185ms motor.
+_ZOOM_MIN = 1
+_ZOOM_MAX = 36
+_ZOOM_DEFAULT = 1
+_ZOOM_STEP = 1
 
 # WGWK Camera "vendor" id (UI에 표시).
 _VENDOR = "wgwk"
@@ -105,6 +112,10 @@ def build_camera_model(cfg: WgwkConfig, camera_id: str | None = None) -> Camera:
             focus=FocusRange(
                 min=_FOCUS_MIN, max=_FOCUS_MAX,
                 step=_FOCUS_STEP, default=_FOCUS_DEFAULT,
+            ),
+            zoom=ZoomRange(
+                min=_ZOOM_MIN, max=_ZOOM_MAX,
+                step=_ZOOM_STEP, default=_ZOOM_DEFAULT,
             ),
             power_line_frequency=None,
             formats=(),       # RTSP는 카메라가 결정
@@ -189,8 +200,10 @@ class WgwkCaptureDevice:
 
         # Client-side focus counter. None = device 미오픈, otherwise [0, FOCUS_MAX].
         self._focus_pos: int = _FOCUS_DEFAULT
+        self._zoom_pos: int = _ZOOM_DEFAULT
         self._af_state: bool = False
         self._focus_lock = threading.Lock()  # focus 명령 직렬화
+        self._zoom_lock = threading.Lock()
 
     @property
     def device_path(self) -> str:
@@ -351,6 +364,40 @@ class WgwkCaptureDevice:
         except Exception as e:
             _log.warning("wgwk set_autofocus(%s) failed: %s", enabled, e)
             return None
+
+    # ----- zoom (optical, KF 단위) -----
+    #
+    # wgwk_camera는 모터 absolute encoder readback이 불가하여 SW-side KF
+    # 추정기를 사용. UI 슬라이더 값을 그대로 client-side 카운터로 채택하고
+    # 슬라이더의 이전 값과의 delta만큼 zoom_in/zoom_out 명령 발사.
+
+    def get_zoom(self) -> int | None:
+        if self._cap is None:
+            return None
+        return self._zoom_pos
+
+    def set_zoom(self, value: int) -> int | None:
+        if self._cap is None or self._cam is None:
+            return None
+        target = max(_ZOOM_MIN, min(_ZOOM_MAX, int(value)))
+        with self._zoom_lock:
+            delta_kf = target - self._zoom_pos
+            if delta_kf == 0:
+                return self._zoom_pos
+            # 실측 185ms/KF (wgwk_camera ZoomTracker 기본값). cam의 실제 값 사용.
+            ms_per_kf = float(getattr(self._cam._zoom, "ms_per_kf", 185.0))
+            ms = int(abs(delta_kf) * ms_per_kf)
+            try:
+                if delta_kf > 0:
+                    self._cam.zoom_in(ms)
+                else:
+                    self._cam.zoom_out(ms)
+            except Exception as e:
+                _log.warning("wgwk set_zoom(%d→%d) failed: %s",
+                             self._zoom_pos, target, e)
+                return self._zoom_pos
+            self._zoom_pos = target
+        return self._zoom_pos
 
     # ----- power_line_frequency: not applicable -----
 

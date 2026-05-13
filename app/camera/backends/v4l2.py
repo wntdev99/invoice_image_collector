@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import cv2
 
 from app.camera.errors import CameraBusy
-from app.camera.models import Capabilities, FocusRange, PowerLineFrequency
+from app.camera.models import Capabilities, FocusRange, PowerLineFrequency, ZoomRange
 
 if TYPE_CHECKING:
     import numpy as np
@@ -23,6 +23,7 @@ _log = logging.getLogger(__name__)
 
 _AF_CTRL_TOKENS = ("focus_automatic_continuous", "focus_auto")
 _MF_CTRL_TOKENS = ("focus_absolute", "focus_relative")
+_ZOOM_CTRL_TOKEN = "zoom_absolute"
 _CTRL_RANGE_RE = re.compile(
     r"min=(-?\d+)\s+max=(-?\d+)(?:\s+step=(\d+))?\s+default=(-?\d+)"
 )
@@ -42,6 +43,7 @@ def probe_capabilities(device_path: str) -> Capabilities:
         has_autofocus=any(t in ctrls_text for t in _AF_CTRL_TOKENS),
         has_manual_focus=any(t in ctrls_text for t in _MF_CTRL_TOKENS),
         focus=_probe_focus_range(ctrls_text),
+        zoom=_probe_zoom_range(ctrls_text),
         power_line_frequency=_probe_power_line_frequency(ctrls_text),
         formats=tuple(formats),
         resolutions=tuple(resolutions),
@@ -104,6 +106,28 @@ def _probe_focus_range(ctrls_text: str) -> FocusRange | None:
             return None
         step_str = m.group(3)
         return FocusRange(
+            min=int(m.group(1)),
+            max=int(m.group(2)),
+            step=max(int(step_str) if step_str else 1, 1),
+            default=int(m.group(4)),
+        )
+    return None
+
+
+def _probe_zoom_range(ctrls_text: str) -> ZoomRange | None:
+    """Parse V4L2 ``zoom_absolute`` control range.
+
+    Cameras like Logitech PTZ Pro, Sony EVI 시리즈가 노출. UVC ``zoom_absolute``
+    값은 펌웨어별 정수(예: 100~800). 의미는 카메라 데이터시트 참조.
+    """
+    for line in ctrls_text.splitlines():
+        if _ZOOM_CTRL_TOKEN not in line:
+            continue
+        m = _CTRL_RANGE_RE.search(line)
+        if m is None:
+            return None
+        step_str = m.group(3)
+        return ZoomRange(
             min=int(m.group(1)),
             max=int(m.group(2)),
             step=max(int(step_str) if step_str else 1, 1),
@@ -310,6 +334,21 @@ class V4L2CaptureDevice:
             return None
         self._cap.set(cv2.CAP_PROP_AUTOFOCUS, 1.0 if enabled else 0.0)
         return self.get_autofocus()
+
+    # OpenCV's CAP_PROP_ZOOM maps to V4L2_CID_ZOOM_ABSOLUTE on the V4L2
+    # backend. Cameras without the ctrl will silently return -1.
+
+    def get_zoom(self) -> int | None:
+        if self._cap is None:
+            return None
+        v = self._cap.get(cv2.CAP_PROP_ZOOM)
+        return int(v) if v >= 0 else None
+
+    def set_zoom(self, value: int) -> int | None:
+        if self._cap is None:
+            return None
+        self._cap.set(cv2.CAP_PROP_ZOOM, float(value))
+        return self.get_zoom()
 
     # ``power_line_frequency`` has no dedicated cv2.CAP_PROP_* mapping, so we
     # go via v4l2-ctl. uvcvideo allows ctrl ioctls on a separate fd while our

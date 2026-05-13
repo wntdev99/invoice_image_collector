@@ -41,6 +41,16 @@ def serialize_camera(camera: Camera, registry: CameraRegistry | None = None) -> 
                 if camera.capabilities.focus is not None
                 else None
             ),
+            "zoom": (
+                {
+                    "min": camera.capabilities.zoom.min,
+                    "max": camera.capabilities.zoom.max,
+                    "step": camera.capabilities.zoom.step,
+                    "default": camera.capabilities.zoom.default,
+                }
+                if camera.capabilities.zoom is not None
+                else None
+            ),
             "power_line_frequency": (
                 {
                     "min": camera.capabilities.power_line_frequency.min,

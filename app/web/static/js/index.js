@@ -67,6 +67,7 @@
     const caps = cam.capabilities;
     if (caps.has_autofocus) chips.appendChild(makeChip("AF"));
     if (caps.has_manual_focus) chips.appendChild(makeChip("MF"));
+    if (caps.zoom) chips.appendChild(makeChip("ZOOM"));
     const maxRes = caps.resolutions[caps.resolutions.length - 1];
     if (maxRes) chips.appendChild(makeChip(`${maxRes[0]}×${maxRes[1]}`));
     if (caps.formats.length > 0) chips.appendChild(makeChip(caps.formats.join("/")));

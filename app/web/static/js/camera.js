@@ -12,6 +12,10 @@
   const focusValue = document.getElementById("focus-value");
   const focusHint = document.getElementById("focus-hint");
   const afToggle = document.getElementById("af-toggle");
+  const zoomGroup = document.getElementById("zoom-group");
+  const zoomSlider = document.getElementById("zoom-slider");
+  const zoomValue = document.getElementById("zoom-value");
+  const zoomHint = document.getElementById("zoom-hint");
   const labelInput = document.getElementById("label-input");
   const extSelect = document.getElementById("ext-select");
   const captureBtn = document.getElementById("capture-btn");
@@ -32,6 +36,9 @@
   // In-flight adaptive pattern for focus slider.
   let pendingFocus = null;
   let inFlight = false;
+  // Same pattern for optical zoom slider.
+  let pendingZoom = null;
+  let zoomInFlight = false;
 
   img.addEventListener("load", () => {
     if (!firstFrame) {
@@ -175,6 +182,18 @@
     } else {
       plfGroup.hidden = true;
     }
+
+    if (data.zoom) {
+      zoomSlider.min = data.zoom.min;
+      zoomSlider.max = data.zoom.max;
+      zoomSlider.step = data.zoom.step;
+      zoomSlider.value = data.zoom.value ?? data.zoom.default;
+      zoomSlider.disabled = false;
+      zoomValue.textContent = zoomSlider.value;
+      zoomGroup.hidden = false;
+    } else {
+      zoomGroup.hidden = true;
+    }
   }
 
   plfSelect.addEventListener("change", async () => {
@@ -254,6 +273,47 @@
       }
     } finally {
       inFlight = false;
+    }
+  }
+
+  zoomSlider.addEventListener("input", () => {
+    const value = parseInt(zoomSlider.value, 10);
+    zoomValue.textContent = value;
+    pendingZoom = value;
+    drainZoom();
+  });
+
+  async function drainZoom() {
+    if (zoomInFlight || pendingZoom === null) return;
+    zoomInFlight = true;
+    try {
+      while (pendingZoom !== null) {
+        const value = pendingZoom;
+        pendingZoom = null;
+        try {
+          const resp = await fetch(
+            `/api/cameras/${encodeURIComponent(cameraId)}/controls`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ zoom: value }),
+            }
+          );
+          if (!resp.ok) {
+            console.warn("zoom PATCH failed:", resp.status);
+            continue;
+          }
+          const data = await resp.json();
+          if ("zoom" in data && data.zoom !== null && pendingZoom === null) {
+            zoomValue.textContent = data.zoom;
+          }
+        } catch (err) {
+          console.error("zoom PATCH error:", err);
+          break;
+        }
+      }
+    } finally {
+      zoomInFlight = false;
     }
   }
 
