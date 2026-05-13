@@ -17,6 +17,10 @@ from app.api.controls import router as controls_router
 from app.api.events import router as events_router
 from app.api.images import router as images_router
 from app.api.stream import router as stream_router
+from app.camera.backends.wgwk import (
+    parse_env_cameras as parse_wgwk_env_cameras,
+    register_static_cameras as register_wgwk_static_cameras,
+)
 from app.camera.discovery import CameraDiscovery
 from app.camera.registry import CameraRegistry
 from app.capture.autofocus import SoftwareAutofocus
@@ -43,6 +47,13 @@ async def lifespan(app: FastAPI):
     )
     discovery = CameraDiscovery(registry, bus)
     discovery.start(asyncio.get_running_loop())
+
+    # WGWK 정적 카메라(env 설정)를 V4L2 hot-plug와 별도로 registry에 등록.
+    # IIC_WGWK_HOST 미설정이면 no-op.
+    wgwk_configs = parse_wgwk_env_cameras()
+    if wgwk_configs:
+        register_wgwk_static_cameras(registry, bus, wgwk_configs)
+
     coordinator = StreamCoordinator(registry)
     capture_service = CaptureService(registry, coordinator, settings.storage_dir)
     autofocus = SoftwareAutofocus(registry, coordinator)

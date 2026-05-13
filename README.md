@@ -68,6 +68,29 @@ journalctl -u iic.service -f
 | `IIC_HOST` | `0.0.0.0` | listen host (script/run.sh가 그대로 사용) |
 | `IIC_PORT` | `8000` | listen port (script/run.sh는 8001을 기본으로 override) |
 | `IIC_STORAGE_DIR` | `~/Pictures/invoice_image_collector` | 촬영 이미지 저장 경로 |
+| `IIC_WGWK_HOST` | (unset) | WGWK-AS500J IP. 설정 시 startup에서 정적으로 registry에 추가됨 |
+| `IIC_WGWK_NAME` | `WGWK-AS500J` | UI 표시 이름 |
+| `IIC_WGWK_USERNAME` | `admin` | HAPI basic auth |
+| `IIC_WGWK_PASSWORD` | `123456` | HAPI basic auth |
+| `SCF_USERID` | (unset) | SCF 16-hex 토큰 (AF on/off 용). 미설정 시 AF 토글 비활성화 |
+| `SCF_PASSWD` | (unset) | SCF 16-hex 토큰 |
+
+## WGWK 광학줌 IP 카메라
+
+USB 카메라와 함께 WGWK-AS500J (V3.4.5.2 펌웨어) IP 카메라를 등록하려면:
+
+```bash
+export IIC_WGWK_HOST=192.168.8.101
+export SCF_USERID=...   # 웹 UI 로그인 → DevTools에서 추출
+export SCF_PASSWD=...
+./script/run.sh
+```
+
+- `cv2.VideoCapture(rtsp://...)`로 메인 스트림 수신 (4K @ 60fps 가능)
+- Focus 슬라이더는 client-side 정수 카운터 (0~100) — 1 unit = 50ms motor 명령
+- 모터 absolute encoder readback 불가하여 카운터는 상대 위치만 track
+- Optical zoom UI는 미노출 (Phase 2)
+- 의존성: `wgwk_camera` 패키지 (별도 repo)
 
 ## 디렉토리 구조
 

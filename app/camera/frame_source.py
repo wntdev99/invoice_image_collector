@@ -11,8 +11,8 @@ import logging
 import threading
 from typing import TYPE_CHECKING
 
+from app.camera.backends import make_capture_device
 from app.camera.backends.v4l2 import (
-    V4L2CaptureDevice,
     best_match_resolution,
     preferred_format,
 )
@@ -42,7 +42,7 @@ class FrameSource:
         self._target_resolution = target_resolution
         self._target_fps = target_fps
 
-        self._device = V4L2CaptureDevice(camera.device_path)
+        self._device = make_capture_device(camera)
         self._controller = CameraController(self._device, camera.capabilities)
         self._capture_thread: threading.Thread | None = None
         self._stop_evt = threading.Event()
